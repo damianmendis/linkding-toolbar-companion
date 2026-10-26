@@ -22,7 +22,7 @@ This document covers how to build the extension from source, run tests, and cont
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 22.22+ (or 24.15+) -- required by the test tooling (Vitest 5, jsdom 30); CI and the `node:22` image both meet it
 - **npm** 9+
 - A running [Linkding](https://github.com/sissbruecker/linkding) instance for manual testing
 
