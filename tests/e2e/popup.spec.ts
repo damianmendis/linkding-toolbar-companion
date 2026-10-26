@@ -302,6 +302,22 @@ test.describe('Settings page', () => {
     expect(saved.autoRefreshMinutes).toBe(15);
   });
 
+  test('first-time setup: saving the server and token syncs bookmarks straight away', async ({ context, extensionId, mockServer }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    // Start from a fresh install: no settings, no cache.
+    await page.evaluate(() => chrome.storage.local.clear());
+    await page.reload();
+
+    await page.getByLabel('Linkding server URL').fill(mockServer.origin);
+    await page.getByLabel('API token').fill('test-token');
+    await page.getByRole('button', { name: 'Save settings' }).click();
+
+    await expect(page.getByText('✓ Refreshed')).toBeVisible();
+    const cache = await page.evaluate(async () => (await chrome.storage.local.get('cache')).cache);
+    expect(cache.bookmarks.map((b: { title: string }) => b.title)).toEqual(['Alpha']);
+  });
+
   test('the browser refuses an out-of-range value before anything is saved', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/options/index.html`);

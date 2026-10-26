@@ -8,6 +8,8 @@ import {
   createBookmark,
   nextPageUrl,
   httpError,
+  testConnection,
+  TimeoutError,
 } from '../../src/lib/api';
 import type { ApiBookmark, ApiPaginatedResponse } from '../../src/lib/types';
 
@@ -245,5 +247,48 @@ describe('httpError', () => {
     await expect(createBookmark('https://links.example.com', 'tok', { url: 'https://a.example' }))
       .rejects.toThrow('Saving bookmark failed: server error (500). Try again later.');
     vi.unstubAllGlobals();
+  });
+});
+
+describe('request timeout', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('covers reading the body, not just waiting for headers', async () => {
+    vi.useFakeTimers();
+    // Headers arrive at once; the body never finishes.
+    const stalled = { ok: true, status: 200, json: () => new Promise(() => {}) } as unknown as Response;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stalled));
+
+    const pending = fetchAllTags('https://links.example.com', 'tok');
+    const settled = expect(pending).rejects.toBeInstanceOf(TimeoutError);
+    await vi.advanceTimersByTimeAsync(5000);
+    await settled;
+  });
+
+  it('aborts the underlying request when it times out', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise(() => {});
+    }));
+
+    const pending = fetchAllTags('https://links.example.com', 'tok');
+    const settled = expect(pending).rejects.toThrow(/too long to respond/);
+    await vi.advanceTimersByTimeAsync(5000);
+    await settled;
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('testConnection reports a timeout as such', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    const pending = testConnection('https://links.example.com', 'tok');
+    const settled = expect(pending).rejects.toThrow('Connection timed out. Check the server URL.');
+    await vi.advanceTimersByTimeAsync(5000);
+    await settled;
   });
 });

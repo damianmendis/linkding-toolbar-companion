@@ -36,7 +36,8 @@ linkding-toolbar-companion/
 │   └── manifest.json          # MV3 manifest (source — do not edit dist directly)
 ├── src/
 │   ├── background/
-│   │   └── service-worker.ts  # All network calls, alarm management, message handling
+│   │   ├── service-worker.ts  # Message handling, alarm management
+│   │   └── sync.ts            # Full/incremental sync, one at a time
 │   ├── popup/
 │   │   ├── Popup.tsx          # Container: app-wide state, service-worker messaging, view routing
 │   │   ├── views/
@@ -257,7 +258,7 @@ Tests run with a single Playwright worker (`playwright.config.ts`): each test la
 
 ### All network calls live in the service worker
 
-Every fetch to the Linkding API goes through `src/background/service-worker.ts`. The popup and options page never call `fetch()` directly — they send messages to the background and await a response.
+Every fetch to the Linkding API goes through the background service worker (`src/background/`), via `src/lib/api.ts`. Each request, including reading its response body, has a 5-second timeout. The popup and options page never call `fetch()` directly — they send messages to the background and await a response.
 
 This is required for Manifest V3 correctness and is what resolves the CORS issue that affects direct extension-page fetches.
 
@@ -276,6 +277,8 @@ Messages between the popup/options and the service worker use a typed protocol d
 
 Use `sendToBackground()` from `src/lib/browser.ts` to send messages — it wraps the polyfill and handles response typing.
 
+The service worker only answers messages from the extension's own pages (`sender.id` is checked) and validates each one with `parseBgRequest()` (`src/lib/messages.ts`); anything unknown or malformed gets no response. A new message type needs a case there as well as in `BgRequest`.
+
 ### Local cache
 
 Bookmarks are stored in `browser.storage.local` under a single key. The cache is populated on sync and updated optimistically on create/edit/delete. It is the sole source of truth for popup rendering — the popup never waits for a network call to display content.
@@ -284,9 +287,11 @@ Bookmarks are stored in `browser.storage.local` under a single key. The cache is
 
 ### Sync: full vs. incremental
 
-The initial sync and any user-triggered refresh (`SYNC_BOOKMARKS`) always do a **full** sync (`runFullSync()` in `service-worker.ts`) — fetch every bookmark and tag, replace the cache. The periodic background alarm instead runs `runIncrementalSync()`, which fetches only bookmarks changed since the last sync via Linkding's `modified_since` query parameter and merges them into the existing cache by id.
+The initial sync and any user-triggered refresh (`SYNC_BOOKMARKS`) always do a **full** sync (`fullSync()` in `src/background/sync.ts`) — fetch every bookmark and tag, replace the cache. The periodic background alarm instead runs `backgroundSync()`, which fetches only bookmarks changed since the last sync via Linkding's `modified_since` query parameter and merges them into the existing cache by id.
 
-Linkding's API has no way to list bookmarks *deleted* since a given time, so the incremental path alone can never learn about a deletion — it would linger in the cache forever. `runIncrementalSync()` tracks `lastFullSyncAt` and automatically falls back to a full sync at least once every 24h to reconcile that, bounding how stale a deletion can get without requiring a full refetch on every automatic cycle.
+Linkding's API has no way to list bookmarks *deleted* since a given time, so the incremental path alone can never learn about a deletion — it would linger in the cache forever. `backgroundSync()` tracks `lastFullSyncAt` and automatically falls back to a full sync at least once every 24h to reconcile that, bounding how stale a deletion can get without requiring a full refetch on every automatic cycle.
+
+Syncs never overlap: each reads the cache, fetches, then writes the whole result, so they run one at a time in the order requested, and a background sync is skipped when another is already running or queued.
 
 Archived bookmarks live in a separate collection (`GET /api/bookmarks/archived/`, excluded from the main `/api/bookmarks/` list) that takes the same parameters, including `modified_since` -- both sync paths fetch it alongside the main collection and merge the results by id, same as everything else.
 
