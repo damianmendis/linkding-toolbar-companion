@@ -85,8 +85,7 @@ https://github.com/damianmendis/linkding-toolbar-companion
 | Permission | Justification text |
 |---|---|
 | `storage` | Used to store the user's Linkding server URL, API token, extension settings, and a local cache of bookmarks, entirely on-device, so the popup can load instantly and work offline. |
-| `activeTab` | Used only when the user clicks "Save current page," to read the URL and title of the active tab so they can be pre-filled into the save form. Not used for any other purpose. |
-| `tabs` | Used to open a bookmark in a new tab, or switch to it if it's already open, when the user clicks a search result. |
+| `activeTab` | Granted only when the user opens the popup (toolbar click or keyboard shortcut). Used to read the URL and title of the current tab so they can be pre-filled into the "Save current page" form. Not used for any other purpose. |
 | `alarms` | Used to schedule a periodic background refresh of the local bookmark cache from the user's configured Linkding server, so the cache stays current between manual syncs. |
 | Host permission (`https://*/*`, `http://*/*`, optional/runtime-granted) | Requested at runtime and granted only for the single origin of the Linkding server the user enters in Settings, via the browser's native permission prompt. Needed so the extension can call that server's REST API to sync, save, edit, and delete bookmarks. No other origin is ever requested. |
 

@@ -216,3 +216,37 @@ test.describe('Edit bookmark view', () => {
     await expect(popup.locator(`#${activeId}`)).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+test.describe('Permissions', () => {
+  test.beforeEach(async ({ seedSettings }) => {
+    await seedSettings();
+  });
+
+  test('the extension no longer requests the tabs permission', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const permissions = await page.evaluate(() => chrome.runtime.getManifest().permissions);
+    expect(permissions).not.toContain('tabs');
+    expect(permissions).toContain('activeTab');
+  });
+
+  test("other sites' tab URLs and titles stay unreadable, but the current tab can still be updated", async ({ context, extensionId, mockServer }) => {
+    const ext = await context.newPage();
+    await ext.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const other = await context.newPage();
+    await other.goto('data:text/html,<title>Private page</title>');
+    await other.bringToFront();
+
+    // The same query openUrl's current-tab mode and getActiveTab() make.
+    const active = await ext.evaluate(async () => {
+      const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return { id: t.id, url: t.url, title: t.title };
+    });
+    expect(active.id).toEqual(expect.any(Number));
+    expect(active.url).toBeUndefined(); // no tabs permission, no activeTab grant
+    expect(active.title).toBeUndefined();
+
+    await ext.evaluate(([id, url]) => chrome.tabs.update(id as number, { url: url as string }), [active.id, `${mockServer.origin}/bravo-page`]);
+    await expect.poll(() => other.url()).toContain('/bravo-page');
+  });
+});

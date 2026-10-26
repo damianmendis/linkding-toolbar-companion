@@ -92,8 +92,7 @@ The extension requests only what it needs:
 | Permission | Purpose |
 |---|---|
 | `storage` | Store your settings and bookmark cache locally |
-| `activeTab` | Read the URL and title of the current tab when saving a page |
-| `tabs` | Open bookmarks in a new or existing tab |
+| `activeTab` | Read the URL and title of the current tab when you open the popup, to pre-fill **Save current page** |
 | `alarms` | Schedule periodic background cache refresh |
 | Host permissions | Requested at runtime, scoped only to the exact origin of your configured Linkding server — granted when you click **Test Connection** or **Save** in Settings |
 

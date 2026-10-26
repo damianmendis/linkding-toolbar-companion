@@ -64,6 +64,9 @@ export interface ActiveTabInfo {
   title: string;
 }
 
+// No `tabs` permission: the current tab's url/title are readable only
+// through activeTab, which the browser grants when the user opens the popup.
+// Opening and updating tabs needs no permission at all.
 export async function getActiveTab(): Promise<ActiveTabInfo | null> {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
