@@ -158,6 +158,22 @@ cd dist-firefox && zip -r ../linkding-toolbar-companion-firefox.zip . -x '*.DS_S
 
 ---
 
+## Linting and type checking
+
+```bash
+npm run lint        # TypeScript typecheck, then ESLint
+npm run typecheck   # typecheck only
+```
+
+ESLint (`eslint.config.mjs`) uses the recommended JavaScript and
+typescript-eslint rules everywhere, plus `react-hooks` (including the React
+Compiler checks) and `jsx-a11y` on the extension's own `.tsx` files. Where a
+rule is deliberately switched off for one line, an
+`eslint-disable-next-line` comment says why. CI runs `npm run lint` on every
+pull request and push to `main`.
+
+---
+
 ## Firefox add-on validation (web-ext)
 
 [`web-ext`](https://github.com/mozilla/web-ext) is Mozilla's official add-on
@@ -186,7 +202,7 @@ docker run --rm -v "$PWD":/app -w /app node:22 bash -c "npm ci && npm run lint:f
 testing (`npm run start:firefox`), but that requires a Firefox binary on
 whatever machine runs it -- it's not something this containerized flow covers.
 
-This is local dev tooling only; it is **not** wired into CI yet.
+CI runs it on every pull request and push to `main`, failing on errors (warnings are reported but don't fail the build).
 
 ---
 

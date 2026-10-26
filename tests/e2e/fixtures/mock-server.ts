@@ -9,7 +9,7 @@
  */
 import http from 'http';
 import type { AddressInfo } from 'net';
-import type { ApiBookmark } from '../../../src/lib/types';
+import type { ApiBookmark, BookmarkCreateInput } from '../../../src/lib/types';
 
 export interface MockServer {
   origin: string;
@@ -50,7 +50,8 @@ export async function startMockServer(): Promise<MockServer> {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
     };
-    const readBody = (): Promise<any> =>
+    // The request bodies the extension sends: create and partial-update inputs.
+    const readBody = (): Promise<BookmarkCreateInput> =>
       new Promise((resolve, reject) => {
         let raw = '';
         req.on('data', (chunk) => (raw += chunk));

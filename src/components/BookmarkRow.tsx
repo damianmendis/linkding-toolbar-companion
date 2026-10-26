@@ -66,6 +66,10 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
     const hiddenCount = bookmark.tagNames.length - visibleTags.length;
 
     return (
+      // An option in the search box's listbox: the keyboard reaches it
+      // through the combobox (arrows/Enter/F2 via aria-activedescendant),
+      // so the row itself only needs mouse handlers.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events
       <div
         id={id}
         ref={ref}

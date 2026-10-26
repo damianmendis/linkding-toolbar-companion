@@ -65,6 +65,8 @@ export function EditModal({
   }
 
   return (
+    // Escape-to-close on the dialog itself, per the WAI-ARIA dialog pattern.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={styles.overlay}
       role="dialog"
@@ -94,6 +96,9 @@ export function EditModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Page title"
+              // Moving focus into a newly opened dialog is the WAI-ARIA
+              // dialog pattern, not an unexpected focus jump.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
           </div>

@@ -29,7 +29,7 @@ export function MainView({
   onOpen,
   onEdit,
 }: MainViewProps) {
-  const [query, setQuery] = useState('');
+  const [query, setQueryState] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [limit, setLimit] = useState(RESULTS_PAGE_SIZE);
 
@@ -62,12 +62,18 @@ export function MainView({
 
   const hiddenCount = query.trim() ? allMatches.length - displayResults.length : 0;
 
-  // A new search (or a sync) starts again from the top; showing more keeps
-  // the current selection.
-  useEffect(() => {
+  // A new search starts again from the top, first page; showing more keeps
+  // the current selection. Done here rather than in an effect on `query`,
+  // which would render once with the stale selection first.
+  function setQuery(next: string) {
+    setQueryState(next);
     setActiveIndex(0);
     setLimit(RESULTS_PAGE_SIZE);
-  }, [cache, query]);
+  }
+
+  // A sync or edit can shrink the list under the selection; clamp rather
+  // than jump back to the top.
+  const selected = Math.min(activeIndex, Math.max(displayResults.length - 1, 0));
 
   function handleShowMore() {
     setLimit((n) => n + RESULTS_PAGE_SIZE);
@@ -98,7 +104,7 @@ export function MainView({
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const next = Math.min(activeIndex + 1, displayResults.length - 1);
+      const next = Math.min(selected + 1, displayResults.length - 1);
       setActiveIndex(next);
       rowRefs.current.get(displayResults[next]?.bookmark.id)?.scrollIntoView({ block: 'nearest' });
       return;
@@ -106,28 +112,30 @@ export function MainView({
 
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      const prev = Math.max(activeIndex - 1, 0);
+      const prev = Math.max(selected - 1, 0);
       setActiveIndex(prev);
       rowRefs.current.get(displayResults[prev]?.bookmark.id)?.scrollIntoView({ block: 'nearest' });
       return;
     }
 
-    if (e.key === 'Enter' && displayResults[activeIndex]) {
+    if (e.key === 'Enter' && displayResults[selected]) {
       e.preventDefault();
       const forceNewTab = e.ctrlKey || e.metaKey;
-      onOpen(displayResults[activeIndex].bookmark, forceNewTab ? 'new-tab' : undefined);
+      onOpen(displayResults[selected].bookmark, forceNewTab ? 'new-tab' : undefined);
       return;
     }
 
-    if (e.key === 'F2' && displayResults[activeIndex]) {
+    if (e.key === 'F2' && displayResults[selected]) {
       e.preventDefault();
-      onEdit(displayResults[activeIndex].bookmark);
+      onEdit(displayResults[selected].bookmark);
     }
   }
 
-  const activeBookmarkId = displayResults[activeIndex]?.bookmark.id;
+  const activeBookmarkId = displayResults[selected]?.bookmark.id;
 
   return (
+    // A view-wide keyboard shortcut ('/' focuses search), not a click target.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className={styles.root} onKeyDown={handleGlobalKeyDown}>
       <div className={styles.topBar}>
         <div className={styles.searchWrapper}>
@@ -196,7 +204,7 @@ export function MainView({
               else rowRefs.current.delete(result.bookmark.id);
             }}
             bookmark={result.bookmark}
-            isActive={idx === activeIndex}
+            isActive={idx === selected}
             titleMatchIndex={result.titleMatchIndex}
             titleMatchLength={result.titleMatchLength}
             onOpen={onOpen}

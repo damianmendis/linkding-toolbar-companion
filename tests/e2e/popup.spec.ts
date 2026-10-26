@@ -70,7 +70,7 @@ test.describe('Main view', () => {
     await expect(list.getByText('Delta Archived')).toBeVisible();
   });
 
-  test('keyboard navigation moves selection and Enter opens the selected row in a new tab', async ({ openPopup, context, mockServer }) => {
+  test('keyboard navigation moves selection and Enter opens the selected row in a new tab', async ({ openPopup, context }) => {
     const popup = await openPopup();
     const searchbox = popup.getByRole('combobox', { name: 'Search bookmarks' });
     // Row 0 (Alpha) is selected by default; move down to row 1 (Bravo).

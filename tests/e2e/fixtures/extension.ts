@@ -64,6 +64,8 @@ export interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
+  // Playwright requires the destructuring pattern even with no dependencies.
+  // eslint-disable-next-line no-empty-pattern
   mockServer: async ({}, use) => {
     const server = await startMockServer();
     await use(server);
