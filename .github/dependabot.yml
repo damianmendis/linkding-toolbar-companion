@@ -9,11 +9,31 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # eslint and @eslint/js only work at the same major version, so they
+      # always move together (listed first so this group claims them).
+      eslint:
+        patterns: ['eslint', '@eslint/js']
       # One PR for routine dev-tooling bumps instead of one per package;
       # major versions still arrive individually so they get a proper look.
       dev-tooling:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # ESLint 10: eslint-plugin-jsx-a11y doesn't support it yet (peer
+      # eslint <=9). Remove once a jsx-a11y release accepts ^10.
+      - dependency-name: 'eslint'
+        versions: ['>=10']
+      - dependency-name: '@eslint/js'
+        versions: ['>=10']
+      # TypeScript 6.1+/7: typescript-eslint supports only <6.1. Remove once
+      # its peer range covers the newer version.
+      - dependency-name: 'typescript'
+        versions: ['>=6.1']
+      # @types/node tracks the Node version the project runs on (engines:
+      # 22.x, also CI); newer majors would type-check APIs Node 22 lacks.
+      # Bump it by hand together with engines and CI's node-version.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
