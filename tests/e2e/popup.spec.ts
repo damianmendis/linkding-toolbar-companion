@@ -163,6 +163,21 @@ test.describe('Edit bookmark view', () => {
     expect(mockServer.getBookmarks()[0].title).toBe('Alpha Article (edited)');
   });
 
+  test('clearing the notes field clears them on the server', async ({ openPopup, mockServer, seedSettings }) => {
+    mockServer.setBookmarks([
+      makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha Article', notes: 'Old notes' }),
+    ]);
+    await seedSettings(); // re-sync so the cache picks up the notes
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
+    await expect(popup.getByLabel('Notes')).toHaveValue('Old notes');
+    await popup.getByLabel('Notes').fill('');
+    await popup.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(popup.getByRole('listbox', { name: 'Bookmarks' })).toBeVisible();
+    expect(mockServer.getBookmarks()[0].notes).toBe('');
+  });
+
   test('deleting removes the bookmark after confirmation', async ({ openPopup, mockServer }) => {
     const popup = await openPopup();
     await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();

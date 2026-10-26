@@ -77,13 +77,15 @@ async function runIncrementalSync(): Promise<CacheState> {
   const lastFullSyncMs = current.lastFullSyncAt ? new Date(current.lastFullSyncAt).getTime() : 0;
   const dueForFullSync = Date.now() - lastFullSyncMs > FULL_RESYNC_INTERVAL_MS;
 
-  if (dueForFullSync || current.bookmarks.length === 0 || !current.lastSyncAt) {
+  const since = current.syncCursor;
+
+  if (dueForFullSync || !since) {
     return runFullSync();
   }
 
   const [changedActive, changedArchived, tags] = await Promise.all([
-    fetchBookmarksModifiedSince(settings.serverUrl, settings.apiToken, current.lastSyncAt),
-    fetchArchivedBookmarksModifiedSince(settings.serverUrl, settings.apiToken, current.lastSyncAt),
+    fetchBookmarksModifiedSince(settings.serverUrl, settings.apiToken, since),
+    fetchArchivedBookmarksModifiedSince(settings.serverUrl, settings.apiToken, since),
     fetchAllTags(settings.serverUrl, settings.apiToken),
   ]);
 

@@ -34,6 +34,7 @@ import type {
   DeleteResponse,
 } from '../lib/types';
 import { EMPTY_CACHE } from '../lib/types';
+import { isWebUrl } from '../lib/validators';
 
 type View = 'unconfigured' | 'main' | 'add' | 'edit';
 
@@ -100,7 +101,7 @@ export function Popup() {
   // ─── Open ─────────────────────────────────────────────────────────────────
 
   function handleOpen(bm: Bookmark, modeOverride?: 'new-tab' | 'current-tab') {
-    if (!settings) return;
+    if (!settings || !isWebUrl(bm.url)) return;
     openUrl(bm.url, modeOverride ?? settings.openMode);
     window.close();
   }

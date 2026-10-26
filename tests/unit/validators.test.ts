@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateServerUrl, validateApiToken, isPrivateOrLocalHost } from '../../src/lib/validators';
+import { validateServerUrl, validateApiToken, isPrivateOrLocalHost, isWebUrl } from '../../src/lib/validators';
 
 describe('validateServerUrl', () => {
   it('accepts valid https URL', () => {
@@ -77,5 +77,20 @@ describe('validateApiToken', () => {
 
   it('rejects empty string', () => {
     expect(() => validateApiToken('')).toThrow(/required/i);
+  });
+});
+
+describe('isWebUrl', () => {
+  it('accepts http and https', () => {
+    expect(isWebUrl('https://example.com/a?b=c')).toBe(true);
+    expect(isWebUrl('http://192.168.1.5:9090/')).toBe(true);
+  });
+
+  it('rejects script, data, file and unparseable URLs', () => {
+    expect(isWebUrl('javascript:alert(1)')).toBe(false);
+    expect(isWebUrl('JavaScript:alert(1)')).toBe(false);
+    expect(isWebUrl('data:text/html,<script>alert(1)</script>')).toBe(false);
+    expect(isWebUrl('file:///etc/passwd')).toBe(false);
+    expect(isWebUrl('not a url')).toBe(false);
   });
 });

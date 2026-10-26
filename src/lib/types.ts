@@ -43,6 +43,13 @@ export interface CacheState {
    * full-resync fallback that reconciles them.
    */
   lastFullSyncAt?: string;
+  /**
+   * The modified_since point for the next incremental sync: the newest
+   * server-side date_modified any sync has returned. Only syncs move it --
+   * not edits made through the extension -- so a change made on the server
+   * just before one of those edits isn't skipped.
+   */
+  syncCursor?: string;
   lastSyncStatus: 'idle' | 'success' | 'error';
   lastError?: string;
   /** Approximate serialized size of this cache, in bytes. */

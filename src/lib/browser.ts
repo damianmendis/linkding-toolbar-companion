@@ -7,6 +7,7 @@
 import browser from 'webextension-polyfill';
 import type { Settings, CacheState, BgRequest, BgResponse } from './types';
 import { STORAGE_KEYS } from './types';
+import { isWebUrl } from './validators';
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ export async function getActiveTab(): Promise<ActiveTabInfo | null> {
 }
 
 export async function openUrl(url: string, mode: 'new-tab' | 'current-tab'): Promise<void> {
+  if (!isWebUrl(url)) throw new Error('Only http and https bookmarks can be opened.');
   if (mode === 'new-tab') {
     await browser.tabs.create({ url });
   } else {

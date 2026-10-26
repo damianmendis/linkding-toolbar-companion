@@ -35,7 +35,9 @@ export function EditModal({
       await onSave({
         title: title.trim(),
         url: url.trim(),
-        notes: notes.trim() || undefined,
+        // '' rather than undefined: an omitted field is left unchanged by
+        // the PATCH, so clearing the notes would otherwise do nothing.
+        notes: notes.trim(),
         tagNames: tags.split(',').map((t) => t.trim()).filter(Boolean),
       });
     } catch (err) {

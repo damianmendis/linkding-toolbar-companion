@@ -61,6 +61,20 @@ export function validateServerUrl(raw: string): string {
   return trimmed.replace(/\/$/, '');
 }
 
+/**
+ * True for http(s) URLs -- the only kind the popup opens. Browsers already
+ * refuse javascript: URLs in tabs.create/update, but a bookmark's URL comes
+ * from the server, so check explicitly rather than rely on that.
+ */
+export function isWebUrl(raw: string): boolean {
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function validateApiToken(token: string): string {
   const trimmed = token.trim();
   if (!trimmed) throw new Error('API token is required.');

@@ -4,6 +4,10 @@ import {
   fetchBookmarksModifiedSince,
   fetchAllArchivedBookmarks,
   fetchArchivedBookmarksModifiedSince,
+  fetchAllTags,
+  createBookmark,
+  nextPageUrl,
+  httpError,
 } from '../../src/lib/api';
 import type { ApiBookmark, ApiPaginatedResponse } from '../../src/lib/types';
 
@@ -147,5 +151,99 @@ describe('archived bookmark endpoints', () => {
     const [url] = fetchMock.mock.calls[0];
     expect(url).toContain('/api/bookmarks/archived/');
     expect(url).toContain('modified_since=2024-06-01T00%3A00%3A00Z');
+  });
+});
+
+describe('nextPageUrl', () => {
+  const current = 'https://links.example.com/api/bookmarks/?limit=100';
+
+  it('returns null when there is no next page', () => {
+    expect(nextPageUrl(current, null)).toBeNull();
+  });
+
+  it('keeps the configured origin when the server writes http:// or an internal host', () => {
+    expect(nextPageUrl(current, 'http://links.example.com/api/bookmarks/?limit=100&offset=100'))
+      .toBe('https://links.example.com/api/bookmarks/?limit=100&offset=100');
+    expect(nextPageUrl(current, 'http://linkding:9090/api/bookmarks/?limit=100&offset=100'))
+      .toBe('https://links.example.com/api/bookmarks/?limit=100&offset=100');
+  });
+
+  it('never follows a link to a different site', () => {
+    expect(nextPageUrl(current, 'https://evil.example.net/steal?limit=100&offset=100'))
+      .toBe('https://links.example.com/api/bookmarks/?limit=100&offset=100');
+  });
+
+  it('keeps a path prefix the proxy strips from the link', () => {
+    expect(nextPageUrl('https://example.com/linkding/api/tags/?limit=100', 'https://example.com/api/tags/?limit=100&offset=100'))
+      .toBe('https://example.com/linkding/api/tags/?limit=100&offset=100');
+  });
+
+  it('throws instead of looping when next points at the same page', () => {
+    expect(() => nextPageUrl(current, current)).toThrow(/same page/);
+  });
+});
+
+describe('pagination sends the token only to the configured server', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('rewrites a foreign next link for bookmarks and tags', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(paginatedResponse([apiBookmark({ id: 1 })], 'http://linkding:9090/api/bookmarks/?limit=100&offset=100')))
+      .mockResolvedValueOnce(jsonResponse(paginatedResponse([apiBookmark({ id: 2 })])))
+      .mockResolvedValueOnce(jsonResponse({ count: 2, next: 'http://linkding:9090/api/tags/?limit=100&offset=100', previous: null, results: [{ id: 1, name: 'a', date_added: '' }] }))
+      .mockResolvedValueOnce(jsonResponse({ count: 2, next: null, previous: null, results: [{ id: 2, name: 'b', date_added: '' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchBookmarksModifiedSince('https://links.example.com', 'tok', '2024-06-01T00:00:00Z');
+    const tags = await fetchAllTags('https://links.example.com', 'tok');
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls.every((u) => u.startsWith('https://links.example.com/api/'))).toBe(true);
+    expect(urls[1]).toContain('offset=100');
+    expect(tags).toEqual(['a', 'b']);
+  });
+});
+
+function errorResponse(status: number, body: unknown, contentType = 'application/json'): Response {
+  return {
+    ok: false,
+    status,
+    headers: new Headers({ 'content-type': contentType }),
+    json: async () => body,
+    text: async () => String(body),
+  } as Response;
+}
+
+describe('httpError', () => {
+  it('passes through Linkding validation errors', async () => {
+    const err = await httpError('Saving bookmark', errorResponse(400, { url: ['Enter a valid URL.'] }));
+    expect(err.message).toBe('Saving bookmark failed: url: Enter a valid URL. (400).');
+  });
+
+  it('never includes a non-JSON body such as a proxy error page', async () => {
+    const err = await httpError('Saving bookmark', errorResponse(400, '<html><body>Bad Request</body></html>', 'text/html'));
+    expect(err.message).toBe('Saving bookmark failed: the server rejected the request (400).');
+  });
+
+  it('truncates long validation details', async () => {
+    const err = await httpError('Saving bookmark', errorResponse(400, { notes: ['x'.repeat(500)] }));
+    expect(err.message.length).toBeLessThan(260);
+    expect(err.message).toContain('…');
+  });
+
+  it('maps auth, not-found and server errors to short messages', async () => {
+    expect((await httpError('Updating bookmark', errorResponse(401, {}))).message).toMatch(/Invalid API token/);
+    expect((await httpError('Deleting bookmark', errorResponse(404, {}))).message).toBe('Deleting bookmark failed: not found on the server (404).');
+    expect((await httpError('Fetching tags', errorResponse(502, '<html>Bad Gateway</html>', 'text/html'))).message)
+      .toBe('Fetching tags failed: server error (502). Try again later.');
+  });
+
+  it('is what createBookmark throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500, '<html>oops</html>', 'text/html')));
+    await expect(createBookmark('https://links.example.com', 'tok', { url: 'https://a.example' }))
+      .rejects.toThrow('Saving bookmark failed: server error (500). Try again later.');
+    vi.unstubAllGlobals();
   });
 });

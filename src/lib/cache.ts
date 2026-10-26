@@ -60,6 +60,7 @@ export async function setCacheFromSync(
     tags,
     lastSyncAt: now,
     lastFullSyncAt: now,
+    syncCursor: latestModifiedAt(bookmarks),
     lastSyncStatus: 'success',
     lastError: undefined,
     schemaVersion: 1,
@@ -86,9 +87,29 @@ export async function mergeBookmarksIntoCache(
     bookmarks: Array.from(byId.values()),
     tags,
     lastSyncAt: new Date().toISOString(),
+    syncCursor: latestModifiedAt([...changed, { updated: current.syncCursor }]),
     lastSyncStatus: 'success',
     lastError: undefined,
   });
+}
+
+/**
+ * The newest server-side date_modified among `bookmarks` (see
+ * CacheState.syncCursor). Taken from the server's own timestamps rather
+ * than the browser's clock, so neither clock skew nor edits made on the
+ * server while a sync was running can slip between two syncs unseen.
+ */
+export function latestModifiedAt(bookmarks: Pick<Bookmark, 'updated'>[]): string | undefined {
+  let latest: string | undefined;
+  let latestMs = -Infinity;
+  for (const { updated } of bookmarks) {
+    const ms = updated ? Date.parse(updated) : NaN;
+    if (ms > latestMs) {
+      latestMs = ms;
+      latest = updated;
+    }
+  }
+  return latest;
 }
 
 export async function setCacheError(message: string): Promise<void> {

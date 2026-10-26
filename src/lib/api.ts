@@ -59,6 +59,68 @@ function normalizeBase(serverUrl: string): string {
   return serverUrl.replace(/\/$/, '');
 }
 
+/**
+ * Resolves a paginated response's `next` link against the URL just fetched,
+ * keeping only its query string (limit/offset/filters). Every page request
+ * carries the API token, so following `next` as given would send it to
+ * whatever origin the server wrote there -- and Linkding behind a reverse
+ * proxy that doesn't forward the original scheme/host commonly writes an
+ * http:// or internal-hostname link, which would leak the token in clear
+ * text or simply fail once a library passes one page.
+ */
+export function nextPageUrl(current: string, next: string | null): string | null {
+  if (!next) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(next, current);
+  } catch {
+    throw new Error('The server returned an invalid pagination link.');
+  }
+  const url = new URL(current);
+  url.search = parsed.search;
+  const resolved = url.toString();
+  if (resolved === current) {
+    throw new Error('The server returned a pagination link to the same page.');
+  }
+  return resolved;
+}
+
+const MAX_ERROR_DETAIL = 200;
+
+/**
+ * Builds a short, readable error for a failed API response. Only Linkding's
+ * own JSON validation errors (400s, e.g. {"url": ["Enter a valid URL."]})
+ * are passed through -- never a raw body, which behind a proxy is often a
+ * whole HTML error page.
+ */
+export async function httpError(action: string, resp: Response): Promise<Error> {
+  const { status } = resp;
+  if (status === 401 || status === 403) {
+    return new Error('Invalid API token. Check your token in Linkding settings.');
+  }
+  if (status === 404) return new Error(`${action} failed: not found on the server (404).`);
+  if (status >= 500) return new Error(`${action} failed: server error (${status}). Try again later.`);
+  if (status === 400) {
+    const detail = await validationDetail(resp);
+    return new Error(`${action} failed: ${detail || 'the server rejected the request'} (400).`);
+  }
+  return new Error(`${action} failed: server returned ${status}.`);
+}
+
+async function validationDetail(resp: Response): Promise<string> {
+  if (!(resp.headers?.get('content-type') ?? '').includes('application/json')) return '';
+  try {
+    const body: unknown = await resp.json();
+    if (!body || typeof body !== 'object') return '';
+    const text = Object.entries(body as Record<string, unknown>)
+      .map(([field, msg]) => `${field}: ${Array.isArray(msg) ? msg.join(' ') : String(msg)}`)
+      .join('; ');
+    return text.length > MAX_ERROR_DETAIL ? `${text.slice(0, MAX_ERROR_DETAIL - 1)}…` : text;
+  } catch {
+    return '';
+  }
+}
+
 // ─── Public API functions ─────────────────────────────────────────────────────
 
 export async function testConnection(
@@ -113,10 +175,10 @@ async function fetchBookmarkPages(
 
   while (url) {
     const resp = await fetchWithTimeout(url, { method: 'GET', headers });
-    if (!resp.ok) throw new Error(`Fetch bookmarks failed: ${resp.status}`);
+    if (!resp.ok) throw await httpError('Fetching bookmarks', resp);
     const data: ApiPaginatedResponse<ApiBookmark> = await resp.json();
     bookmarks.push(...data.results.map(mapApiBookmark));
-    url = data.next;
+    url = nextPageUrl(url, data.next);
   }
 
   return bookmarks;
@@ -165,10 +227,10 @@ export async function fetchAllTags(
 
   while (url) {
     const resp = await fetchWithTimeout(url, { method: 'GET', headers });
-    if (!resp.ok) throw new Error(`Fetch tags failed: ${resp.status}`);
+    if (!resp.ok) throw await httpError('Fetching tags', resp);
     const data: ApiPaginatedResponse<ApiTag> = await resp.json();
     tags.push(...data.results.map((t) => t.name));
-    url = data.next;
+    url = nextPageUrl(url, data.next);
   }
 
   return tags;
@@ -185,10 +247,7 @@ export async function createBookmark(
     headers: buildHeaders(apiToken),
     body: JSON.stringify(input),
   });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Failed to save bookmark: ${resp.status} ${body}`);
-  }
+  if (!resp.ok) throw await httpError('Saving bookmark', resp);
   const data: ApiBookmark = await resp.json();
   return mapApiBookmark(data);
 }
@@ -205,10 +264,7 @@ export async function updateBookmark(
     headers: buildHeaders(apiToken),
     body: JSON.stringify(input),
   });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Failed to update bookmark: ${resp.status} ${body}`);
-  }
+  if (!resp.ok) throw await httpError('Updating bookmark', resp);
   const data: ApiBookmark = await resp.json();
   return mapApiBookmark(data);
 }
@@ -223,7 +279,5 @@ export async function deleteBookmark(
     method: 'DELETE',
     headers: buildHeaders(apiToken),
   });
-  if (resp.status !== 204 && !resp.ok) {
-    throw new Error(`Failed to delete bookmark: ${resp.status}`);
-  }
+  if (!resp.ok) throw await httpError('Deleting bookmark', resp);
 }
