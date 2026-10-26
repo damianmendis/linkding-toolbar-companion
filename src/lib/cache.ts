@@ -34,21 +34,6 @@ export async function getCache(): Promise<CacheState> {
   return stored;
 }
 
-export async function updateCacheBookmarks(
-  updater: (bookmarks: Bookmark[]) => Bookmark[],
-  tags?: string[]
-): Promise<CacheState> {
-  const current = await getCache();
-  return persist({
-    ...current,
-    bookmarks: updater(current.bookmarks),
-    tags: tags ?? current.tags,
-    lastSyncAt: new Date().toISOString(),
-    lastSyncStatus: 'success',
-    lastError: undefined,
-  });
-}
-
 /** Replaces the entire cache -- used after a full sync. */
 export async function setCacheFromSync(
   bookmarks: Bookmark[],

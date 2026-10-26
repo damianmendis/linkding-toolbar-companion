@@ -117,17 +117,6 @@ export interface BookmarkUpdateInput {
   tag_names?: string[];
 }
 
-// ─── App state types ─────────────────────────────────────────────────────────
-
-export type PopupView = 'main' | 'add' | 'edit' | 'unconfigured';
-export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error' | 'offline';
-
-export interface AppError {
-  message: string;
-  suggestion?: string;
-  retryable?: boolean;
-}
-
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 export const STORAGE_KEYS = {
@@ -146,23 +135,14 @@ export type BgRequest =
   | { type: 'CREATE_BOOKMARK'; input: BookmarkCreateInput }
   | { type: 'UPDATE_BOOKMARK'; id: number; input: BookmarkUpdateInput }
   | { type: 'DELETE_BOOKMARK'; id: number }
-  | { type: 'GET_CACHE' }
-  | { type: 'CLEAR_CACHE' };
+  | { type: 'GET_CACHE' };
 
 export type BgResponse<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
 // Typed helpers so callers don't have to cast
-export type TestConnectionResponse = BgResponse<null>;
 export type SyncResponse = BgResponse<CacheState>;
 export type BookmarkResponse = BgResponse<Bookmark>;
 export type DeleteResponse = BgResponse<null>;
 export type GetCacheResponse = BgResponse<CacheState>;
-export type ClearCacheResponse = BgResponse<null>;
-
-// Legacy (kept for alarm handler compatibility)
-export interface ExtensionMessage {
-  type: string;
-  payload?: unknown;
-}

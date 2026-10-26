@@ -1,4 +1,3 @@
-import React from 'react';
 import styles from '../Popup.module.css';
 import { Button } from '../../components/Button';
 import { openOptionsPage } from '../../lib/browser';

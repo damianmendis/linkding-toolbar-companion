@@ -270,7 +270,6 @@ Messages between the popup/options and the service worker use a typed protocol d
 | `TEST_CONNECTION` | popup/options → SW | Verify server URL and token |
 | `SYNC_BOOKMARKS` | popup/options → SW | Trigger a full cache refresh (always full; the periodic background alarm uses a separate incremental path -- see below) |
 | `GET_CACHE` | popup → SW | Retrieve cached bookmarks for display |
-| `CLEAR_CACHE` | options → SW | Wipe local bookmark cache |
 | `CREATE_BOOKMARK` | popup → SW | Add a new bookmark to Linkding |
 | `UPDATE_BOOKMARK` | popup → SW | Edit an existing bookmark |
 | `DELETE_BOOKMARK` | popup → SW | Remove a bookmark |

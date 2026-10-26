@@ -9,7 +9,7 @@
  * worker. Each view's own UI-local state (search query, form fields,
  * keyboard nav) lives in its own component under ./views.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import styles from './Popup.module.css';
 import { EditModal } from '../components/EditModal';
 import { UnconfiguredView } from './views/UnconfiguredView';

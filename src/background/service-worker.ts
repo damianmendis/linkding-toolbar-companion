@@ -7,7 +7,7 @@
  * fetches carry no page origin.
  */
 import browser from 'webextension-polyfill';
-import { loadSettings, saveCache, loadCache } from '../lib/browser';
+import { loadSettings, loadCache } from '../lib/browser';
 import {
   testConnection as apiTestConnection,
   fetchAllBookmarks,
@@ -118,11 +118,6 @@ browser.runtime.onMessage.addListener(
           .then((c) => ok(c ?? { ...EMPTY_CACHE }))
           .catch((e: Error) => fail(e.message));
       }
-
-      case 'CLEAR_CACHE':
-        return saveCache({ ...EMPTY_CACHE })
-          .then(() => ok(null))
-          .catch((e: Error) => fail(e.message));
 
       case 'CREATE_BOOKMARK':
         return loadSettings().then(async (settings) => {
