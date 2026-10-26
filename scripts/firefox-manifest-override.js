@@ -9,6 +9,9 @@
 //   {required: [...]} shape (a bare {none: true} fails validation), and is
 //   only supported from Firefox 140 / Firefox for Android 142, so
 //   strict_min_version must be at least 142.
+// - gecko.id looks like a placeholder but is permanent: the published AMO
+//   listing is bound to it, and changing it would make Firefox treat new
+//   builds as a different add-on (no automatic updates for existing users).
 const fs = require('fs');
 
 const manifestPath = 'dist-firefox/manifest.json';

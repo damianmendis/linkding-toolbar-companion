@@ -158,9 +158,9 @@ The extension maintains a local cache of your Linkding bookmarks in `browser.sto
 
 | Trigger | Behaviour |
 |---|---|
-| Saving settings | Full sync immediately |
+| Saving settings | Full sync immediately on first setup, or when the server URL or API token changes |
 | Clicking ↻ in the popup | Full sync immediately |
-| Background alarm | Periodic sync (every 30 minutes while the browser is open) |
+| Background alarm | Periodic sync every 5 minutes by default while the browser is open (adjustable from 1 to 60 minutes, or turned off, under **Settings → Sync**). Fetches only changed bookmarks, with a full sync at least once a day to pick up deletions |
 | Creating a bookmark | New bookmark added to cache immediately |
 | Editing a bookmark | Cache updated immediately |
 | Deleting a bookmark | Removed from cache immediately |
@@ -191,7 +191,7 @@ Go to **Settings** and click **Clear cache**. This removes all locally stored bo
 
 ### Changes I made on the Linkding web app aren't showing in the extension
 
-The cache syncs automatically every 30 minutes, or immediately when you trigger a manual sync (↻ button). If you need the latest state right away, click ↻.
+The cache syncs automatically every 5 minutes by default (you can change the interval under **Settings → Sync**), or immediately when you trigger a manual sync (↻ button). If you need the latest state right away, click ↻.
 
 ### The extension was working, then stopped connecting after a server change
 
@@ -199,7 +199,7 @@ If you changed your server URL, token, or SSL certificate, go to **Settings**, u
 
 ### Firefox: extension disappears after browser restart
 
-Firefox temporary add-ons are removed on restart. This is a Firefox restriction for unreviewed extensions. Re-load the add-on from `about:debugging` each session, or wait for a future release with Firefox Add-on store submission.
+You installed it as a temporary add-on from `about:debugging`, which Firefox removes on every restart. For a permanent install that also updates automatically, install it from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/linkding-toolbar-companion/) instead.
 
 ---
 
