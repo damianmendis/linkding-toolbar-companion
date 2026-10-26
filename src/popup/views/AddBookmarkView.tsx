@@ -45,6 +45,9 @@ export function AddBookmarkView({
   }
 
   return (
+    // Escape anywhere in the view cancels -- a keyboard shortcut, not a
+    // click target.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className={styles.root}
       onKeyDown={(e) => {
@@ -61,6 +64,8 @@ export function AddBookmarkView({
       <form onSubmit={handleSubmit} className={styles.addForm}>
         <div className={styles.addField}>
           <label htmlFor="add-url">URL</label>
+          {/* This view replaces the whole popup, so focus starts in its first field. */}
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input id="add-url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} required autoFocus />
         </div>
         <div className={styles.addField}>

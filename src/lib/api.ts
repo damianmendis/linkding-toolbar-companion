@@ -42,14 +42,55 @@ function buildHeaders(apiToken: string): HeadersInit {
   };
 }
 
-async function fetchWithTimeout(
+/**
+ * Shown when a request fails before any response arrives (server down, DNS
+ * failure, connection refused) -- browsers report all of these as a bare
+ * "Failed to fetch" / "NetworkError". The popup's status bar matches on it
+ * to say the server, not the internet connection, is the problem.
+ */
+export const SERVER_UNREACHABLE_MESSAGE =
+  "Can't reach your Linkding server. Check that it's running and the URL in Settings is right.";
+
+/** A request, including reading its response body, took longer than API_TIMEOUT_MS. */
+export class TimeoutError extends Error {
+  constructor() {
+    super('The server took too long to respond. Try again later.');
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * Fetches `url` and runs `handle` on the response, all within one
+ * API_TIMEOUT_MS budget -- so a server that sends headers promptly and then
+ * stalls mid-body still times out. Racing a timer (rather than relying on
+ * the abort alone) guarantees the call settles even if a body read ignores
+ * the abort signal.
+ */
+async function request<T>(
   url: string,
-  options: RequestInit
-): Promise<Response> {
+  options: RequestInit,
+  handle: (resp: Response) => Promise<T>
+): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new TimeoutError());
+      controller.abort();
+    }, API_TIMEOUT_MS);
+  });
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await Promise.race([
+      fetch(url, { ...options, signal: controller.signal })
+        .catch((err: unknown) => {
+          // A timeout aborts the fetch; that rejection loses the race to
+          // TimeoutError, so only report genuine network failures here.
+          if (controller.signal.aborted) throw err;
+          throw new Error(SERVER_UNREACHABLE_MESSAGE);
+        })
+        .then(handle),
+      timedOut,
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -57,6 +98,68 @@ async function fetchWithTimeout(
 
 function normalizeBase(serverUrl: string): string {
   return serverUrl.replace(/\/$/, '');
+}
+
+/**
+ * Resolves a paginated response's `next` link against the URL just fetched,
+ * keeping only its query string (limit/offset/filters). Every page request
+ * carries the API token, so following `next` as given would send it to
+ * whatever origin the server wrote there -- and Linkding behind a reverse
+ * proxy that doesn't forward the original scheme/host commonly writes an
+ * http:// or internal-hostname link, which would leak the token in clear
+ * text or simply fail once a library passes one page.
+ */
+export function nextPageUrl(current: string, next: string | null): string | null {
+  if (!next) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(next, current);
+  } catch {
+    throw new Error('The server returned an invalid pagination link.');
+  }
+  const url = new URL(current);
+  url.search = parsed.search;
+  const resolved = url.toString();
+  if (resolved === current) {
+    throw new Error('The server returned a pagination link to the same page.');
+  }
+  return resolved;
+}
+
+const MAX_ERROR_DETAIL = 200;
+
+/**
+ * Builds a short, readable error for a failed API response. Only Linkding's
+ * own JSON validation errors (400s, e.g. {"url": ["Enter a valid URL."]})
+ * are passed through -- never a raw body, which behind a proxy is often a
+ * whole HTML error page.
+ */
+export async function httpError(action: string, resp: Response): Promise<Error> {
+  const { status } = resp;
+  if (status === 401 || status === 403) {
+    return new Error('Invalid API token. Check your token in Linkding settings.');
+  }
+  if (status === 404) return new Error(`${action} failed: not found on the server (404).`);
+  if (status >= 500) return new Error(`${action} failed: server error (${status}). Try again later.`);
+  if (status === 400) {
+    const detail = await validationDetail(resp);
+    return new Error(`${action} failed: ${detail || 'the server rejected the request'} (400).`);
+  }
+  return new Error(`${action} failed: server returned ${status}.`);
+}
+
+async function validationDetail(resp: Response): Promise<string> {
+  if (!(resp.headers?.get('content-type') ?? '').includes('application/json')) return '';
+  try {
+    const body: unknown = await resp.json();
+    if (!body || typeof body !== 'object') return '';
+    const text = Object.entries(body as Record<string, unknown>)
+      .map(([field, msg]) => `${field}: ${Array.isArray(msg) ? msg.join(' ') : String(msg)}`)
+      .join('; ');
+    return text.length > MAX_ERROR_DETAIL ? `${text.slice(0, MAX_ERROR_DETAIL - 1)}…` : text;
+  } catch {
+    return '';
+  }
 }
 
 // ─── Public API functions ─────────────────────────────────────────────────────
@@ -69,12 +172,12 @@ export async function testConnection(
   let resp: Response;
 
   try {
-    resp = await fetchWithTimeout(`${base}/api/bookmarks/?limit=1`, {
+    resp = await request(`${base}/api/bookmarks/?limit=1`, {
       method: 'GET',
       headers: buildHeaders(apiToken),
-    });
+    }, async (r) => r);
   } catch (err) {
-    if ((err as { name?: string }).name === 'AbortError') {
+    if (err instanceof TimeoutError) {
       throw new Error('Connection timed out. Check the server URL.');
     }
     throw new Error(`Cannot reach server. Check the URL and your network.`);
@@ -112,11 +215,12 @@ async function fetchBookmarkPages(
   let url: string | null = `${base}/api/${path}/?limit=100${query}`;
 
   while (url) {
-    const resp = await fetchWithTimeout(url, { method: 'GET', headers });
-    if (!resp.ok) throw new Error(`Fetch bookmarks failed: ${resp.status}`);
-    const data: ApiPaginatedResponse<ApiBookmark> = await resp.json();
+    const data = await request(url, { method: 'GET', headers }, async (resp) => {
+      if (!resp.ok) throw await httpError('Fetching bookmarks', resp);
+      return (await resp.json()) as ApiPaginatedResponse<ApiBookmark>;
+    });
     bookmarks.push(...data.results.map(mapApiBookmark));
-    url = data.next;
+    url = nextPageUrl(url, data.next);
   }
 
   return bookmarks;
@@ -164,11 +268,12 @@ export async function fetchAllTags(
   let url: string | null = `${base}/api/tags/?limit=100`;
 
   while (url) {
-    const resp = await fetchWithTimeout(url, { method: 'GET', headers });
-    if (!resp.ok) throw new Error(`Fetch tags failed: ${resp.status}`);
-    const data: ApiPaginatedResponse<ApiTag> = await resp.json();
+    const data = await request(url, { method: 'GET', headers }, async (resp) => {
+      if (!resp.ok) throw await httpError('Fetching tags', resp);
+      return (await resp.json()) as ApiPaginatedResponse<ApiTag>;
+    });
     tags.push(...data.results.map((t) => t.name));
-    url = data.next;
+    url = nextPageUrl(url, data.next);
   }
 
   return tags;
@@ -180,17 +285,14 @@ export async function createBookmark(
   input: BookmarkCreateInput
 ): Promise<Bookmark> {
   const base = normalizeBase(serverUrl);
-  const resp = await fetchWithTimeout(`${base}/api/bookmarks/`, {
+  return request(`${base}/api/bookmarks/`, {
     method: 'POST',
     headers: buildHeaders(apiToken),
     body: JSON.stringify(input),
+  }, async (resp) => {
+    if (!resp.ok) throw await httpError('Saving bookmark', resp);
+    return mapApiBookmark((await resp.json()) as ApiBookmark);
   });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Failed to save bookmark: ${resp.status} ${body}`);
-  }
-  const data: ApiBookmark = await resp.json();
-  return mapApiBookmark(data);
 }
 
 export async function updateBookmark(
@@ -200,17 +302,14 @@ export async function updateBookmark(
   input: BookmarkUpdateInput
 ): Promise<Bookmark> {
   const base = normalizeBase(serverUrl);
-  const resp = await fetchWithTimeout(`${base}/api/bookmarks/${id}/`, {
+  return request(`${base}/api/bookmarks/${id}/`, {
     method: 'PATCH',
     headers: buildHeaders(apiToken),
     body: JSON.stringify(input),
+  }, async (resp) => {
+    if (!resp.ok) throw await httpError('Updating bookmark', resp);
+    return mapApiBookmark((await resp.json()) as ApiBookmark);
   });
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Failed to update bookmark: ${resp.status} ${body}`);
-  }
-  const data: ApiBookmark = await resp.json();
-  return mapApiBookmark(data);
 }
 
 export async function deleteBookmark(
@@ -219,11 +318,10 @@ export async function deleteBookmark(
   id: number
 ): Promise<void> {
   const base = normalizeBase(serverUrl);
-  const resp = await fetchWithTimeout(`${base}/api/bookmarks/${id}/`, {
+  await request(`${base}/api/bookmarks/${id}/`, {
     method: 'DELETE',
     headers: buildHeaders(apiToken),
+  }, async (resp) => {
+    if (!resp.ok) throw await httpError('Deleting bookmark', resp);
   });
-  if (resp.status !== 204 && !resp.ok) {
-    throw new Error(`Failed to delete bookmark: ${resp.status}`);
-  }
 }

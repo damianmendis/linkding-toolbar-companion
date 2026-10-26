@@ -76,8 +76,8 @@ Your settings and bookmark cache are stored locally in your browser. Nothing is 
 | Search bookmarks | Type in the search bar |
 | Open a bookmark | Click it, or press `Enter` |
 | Save current page | Click **+ Save current page** |
-| Edit a bookmark | Click the ✏ icon on any row |
-| Delete a bookmark | Click the ✏ icon, then **Delete**, and confirm |
+| Edit a bookmark | Click the pencil icon on any row |
+| Delete a bookmark | Click the pencil icon, then **Delete**, and confirm |
 | Refresh from server | Click ↻ in the popup header or go to Settings |
 | Open settings | Click the ⚙ icon in the popup header |
 
@@ -92,8 +92,7 @@ The extension requests only what it needs:
 | Permission | Purpose |
 |---|---|
 | `storage` | Store your settings and bookmark cache locally |
-| `activeTab` | Read the URL and title of the current tab when saving a page |
-| `tabs` | Open bookmarks in a new or existing tab |
+| `activeTab` | Read the URL and title of the current tab when you open the popup, to pre-fill **Save current page** |
 | `alarms` | Schedule periodic background cache refresh |
 | Host permissions | Requested at runtime, scoped only to the exact origin of your configured Linkding server — granted when you click **Test Connection** or **Save** in Settings |
 

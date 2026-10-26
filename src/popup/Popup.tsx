@@ -9,7 +9,7 @@
  * worker. Each view's own UI-local state (search query, form fields,
  * keyboard nav) lives in its own component under ./views.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import styles from './Popup.module.css';
 import { EditModal } from '../components/EditModal';
 import { UnconfiguredView } from './views/UnconfiguredView';
@@ -34,6 +34,7 @@ import type {
   DeleteResponse,
 } from '../lib/types';
 import { EMPTY_CACHE } from '../lib/types';
+import { isWebUrl } from '../lib/validators';
 
 type View = 'unconfigured' | 'main' | 'add' | 'edit';
 
@@ -91,7 +92,10 @@ export function Popup() {
     setIsSyncing(true);
     try {
       const resp = await sendToBackground<CacheState>({ type: 'SYNC_BOOKMARKS' }) as SyncResponse;
+      // A failed sync records its error in the stored cache; re-read it so
+      // the status bar says so instead of still showing the last success.
       if (resp.ok) setCache(resp.data);
+      else await refreshCache();
     } finally {
       setIsSyncing(false);
     }
@@ -100,7 +104,7 @@ export function Popup() {
   // ─── Open ─────────────────────────────────────────────────────────────────
 
   function handleOpen(bm: Bookmark, modeOverride?: 'new-tab' | 'current-tab') {
-    if (!settings) return;
+    if (!settings || !isWebUrl(bm.url)) return;
     openUrl(bm.url, modeOverride ?? settings.openMode);
     window.close();
   }

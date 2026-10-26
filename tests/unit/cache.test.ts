@@ -25,6 +25,7 @@ const {
   mergeBookmarksIntoCache,
   upsertBookmarkInCache,
   removeBookmarkFromCache,
+  latestModifiedAt,
 } = await import('../../src/lib/cache');
 
 function bm(id: number, overrides: Partial<Bookmark> = {}): Bookmark {
@@ -116,5 +117,36 @@ describe('upsertBookmarkInCache / removeBookmarkFromCache', () => {
     await removeBookmarkFromCache(1);
     const cache = await getCache();
     expect(cache.bookmarks.map((b) => b.id)).toEqual([2]);
+  });
+});
+
+describe('sync cursor', () => {
+  it('latestModifiedAt picks the newest server timestamp, ignoring missing ones', () => {
+    expect(latestModifiedAt([])).toBeUndefined();
+    expect(latestModifiedAt([
+      { updated: '2026-01-02T00:00:00Z' },
+      { updated: undefined },
+      { updated: '2026-01-03T09:00:00+02:00' }, // 07:00Z, newest
+      { updated: '2026-01-03T06:00:00Z' },
+    ])).toBe('2026-01-03T09:00:00+02:00');
+  });
+
+  it('a full sync sets the cursor from the server timestamps, not the browser clock', async () => {
+    const result = await setCacheFromSync([bm(1, { updated: '2026-01-01T00:00:00Z' }), bm(2, { updated: '2026-01-05T00:00:00Z' })], []);
+    expect(result.syncCursor).toBe('2026-01-05T00:00:00Z');
+  });
+
+  it('an incremental sync only moves the cursor forward', async () => {
+    await setCacheFromSync([bm(1, { updated: '2026-01-05T00:00:00Z' })], []);
+    const none = await mergeBookmarksIntoCache([], []);
+    expect(none.syncCursor).toBe('2026-01-05T00:00:00Z');
+    const newer = await mergeBookmarksIntoCache([bm(2, { updated: '2026-01-06T00:00:00Z' })], []);
+    expect(newer.syncCursor).toBe('2026-01-06T00:00:00Z');
+  });
+
+  it('editing through the extension does not move the cursor', async () => {
+    await setCacheFromSync([bm(1, { updated: '2026-01-05T00:00:00Z' })], []);
+    await upsertBookmarkInCache(bm(1, { updated: '2026-02-01T00:00:00Z' }));
+    expect((await getCache()).syncCursor).toBe('2026-01-05T00:00:00Z');
   });
 });

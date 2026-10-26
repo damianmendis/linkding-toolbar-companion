@@ -22,7 +22,7 @@ This document covers how to build the extension from source, run tests, and cont
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 22.22+ (or 24.15+) -- required by the test tooling (Vitest 5, jsdom 30); CI and the `node:22` image both meet it
 - **npm** 9+
 - A running [Linkding](https://github.com/sissbruecker/linkding) instance for manual testing
 
@@ -36,7 +36,8 @@ linkding-toolbar-companion/
 │   └── manifest.json          # MV3 manifest (source — do not edit dist directly)
 ├── src/
 │   ├── background/
-│   │   └── service-worker.ts  # All network calls, alarm management, message handling
+│   │   ├── service-worker.ts  # Message handling, alarm management
+│   │   └── sync.ts            # Full/incremental sync, one at a time
 │   ├── popup/
 │   │   ├── Popup.tsx          # Container: app-wide state, service-worker messaging, view routing
 │   │   ├── views/
@@ -158,6 +159,22 @@ cd dist-firefox && zip -r ../linkding-toolbar-companion-firefox.zip . -x '*.DS_S
 
 ---
 
+## Linting and type checking
+
+```bash
+npm run lint        # TypeScript typecheck, then ESLint
+npm run typecheck   # typecheck only
+```
+
+ESLint (`eslint.config.mjs`) uses the recommended JavaScript and
+typescript-eslint rules everywhere, plus `react-hooks` (including the React
+Compiler checks) and `jsx-a11y` on the extension's own `.tsx` files. Where a
+rule is deliberately switched off for one line, an
+`eslint-disable-next-line` comment says why. CI runs `npm run lint` on every
+pull request and push to `main`.
+
+---
+
 ## Firefox add-on validation (web-ext)
 
 [`web-ext`](https://github.com/mozilla/web-ext) is Mozilla's official add-on
@@ -186,7 +203,7 @@ docker run --rm -v "$PWD":/app -w /app node:22 bash -c "npm ci && npm run lint:f
 testing (`npm run start:firefox`), but that requires a Firefox binary on
 whatever machine runs it -- it's not something this containerized flow covers.
 
-This is local dev tooling only; it is **not** wired into CI yet.
+CI runs it on every pull request and push to `main`, failing on errors (warnings are reported but don't fail the build).
 
 ---
 
@@ -241,7 +258,7 @@ Tests run with a single Playwright worker (`playwright.config.ts`): each test la
 
 ### All network calls live in the service worker
 
-Every fetch to the Linkding API goes through `src/background/service-worker.ts`. The popup and options page never call `fetch()` directly — they send messages to the background and await a response.
+Every fetch to the Linkding API goes through the background service worker (`src/background/`), via `src/lib/api.ts`. Each request, including reading its response body, has a 5-second timeout. The popup and options page never call `fetch()` directly — they send messages to the background and await a response.
 
 This is required for Manifest V3 correctness and is what resolves the CORS issue that affects direct extension-page fetches.
 
@@ -254,12 +271,13 @@ Messages between the popup/options and the service worker use a typed protocol d
 | `TEST_CONNECTION` | popup/options → SW | Verify server URL and token |
 | `SYNC_BOOKMARKS` | popup/options → SW | Trigger a full cache refresh (always full; the periodic background alarm uses a separate incremental path -- see below) |
 | `GET_CACHE` | popup → SW | Retrieve cached bookmarks for display |
-| `CLEAR_CACHE` | options → SW | Wipe local bookmark cache |
 | `CREATE_BOOKMARK` | popup → SW | Add a new bookmark to Linkding |
 | `UPDATE_BOOKMARK` | popup → SW | Edit an existing bookmark |
 | `DELETE_BOOKMARK` | popup → SW | Remove a bookmark |
 
 Use `sendToBackground()` from `src/lib/browser.ts` to send messages — it wraps the polyfill and handles response typing.
+
+The service worker only answers messages from the extension's own pages (`sender.id` is checked) and validates each one with `parseBgRequest()` (`src/lib/messages.ts`); anything unknown or malformed gets no response. A new message type needs a case there as well as in `BgRequest`.
 
 ### Local cache
 
@@ -269,9 +287,11 @@ Bookmarks are stored in `browser.storage.local` under a single key. The cache is
 
 ### Sync: full vs. incremental
 
-The initial sync and any user-triggered refresh (`SYNC_BOOKMARKS`) always do a **full** sync (`runFullSync()` in `service-worker.ts`) — fetch every bookmark and tag, replace the cache. The periodic background alarm instead runs `runIncrementalSync()`, which fetches only bookmarks changed since the last sync via Linkding's `modified_since` query parameter and merges them into the existing cache by id.
+The initial sync and any user-triggered refresh (`SYNC_BOOKMARKS`) always do a **full** sync (`fullSync()` in `src/background/sync.ts`) — fetch every bookmark and tag, replace the cache. The periodic background alarm instead runs `backgroundSync()`, which fetches only bookmarks changed since the last sync via Linkding's `modified_since` query parameter and merges them into the existing cache by id.
 
-Linkding's API has no way to list bookmarks *deleted* since a given time, so the incremental path alone can never learn about a deletion — it would linger in the cache forever. `runIncrementalSync()` tracks `lastFullSyncAt` and automatically falls back to a full sync at least once every 24h to reconcile that, bounding how stale a deletion can get without requiring a full refetch on every automatic cycle.
+Linkding's API has no way to list bookmarks *deleted* since a given time, so the incremental path alone can never learn about a deletion — it would linger in the cache forever. `backgroundSync()` tracks `lastFullSyncAt` and automatically falls back to a full sync at least once every 24h to reconcile that, bounding how stale a deletion can get without requiring a full refetch on every automatic cycle.
+
+Syncs never overlap: each reads the cache, fetches, then writes the whole result, so they run one at a time in the order requested, and a background sync is skipped when another is already running or queued.
 
 Archived bookmarks live in a separate collection (`GET /api/bookmarks/archived/`, excluded from the main `/api/bookmarks/` list) that takes the same parameters, including `modified_since` -- both sync paths fetch it alongside the main collection and merge the results by id, same as everything else.
 

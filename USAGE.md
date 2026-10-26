@@ -75,7 +75,7 @@ The bookmark is sent to your Linkding server immediately and added to the local 
 ## Editing a bookmark
 
 1. Hover over any bookmark row in the popup
-2. Click the **✏ (edit) icon** that appears on the right
+2. Click the **pencil (edit) icon** that appears on the right
 3. Modify title, URL, tags, or notes in the form that opens
 4. Click **Save** to confirm, or **Cancel** to discard
 
@@ -86,7 +86,7 @@ Changes are pushed to your Linkding server and reflected in the cache immediatel
 ## Deleting a bookmark
 
 1. Hover over any bookmark row
-2. Click the **✏ (edit) icon** that appears on the right
+2. Click the **pencil (edit) icon** that appears on the right
 3. Click **Delete** in the edit form
 4. A confirmation dialog appears — click **Delete** to confirm
 
@@ -168,6 +168,11 @@ The extension maintains a local cache of your Linkding bookmarks in `browser.sto
 ### Offline mode
 
 If your Linkding server is unreachable, the popup still loads from the local cache. Searches work normally. Any create, edit, or delete actions will fail with an error message — those require a live server connection.
+
+The status bar at the bottom of the popup tells the two cases apart:
+
+- **Offline — showing cached bookmarks**: your device has no internet connection.
+- **Can't reach your server — showing cached bookmarks**: you're online, but the last sync couldn't connect to your Linkding server (for example, a home server that's switched off, or a changed address). Check the server is running and the URL in **Settings** is right.
 
 ### Clearing the cache
 

@@ -7,27 +7,17 @@
  * fetches carry no page origin.
  */
 import browser from 'webextension-polyfill';
-import { loadSettings, saveCache, loadCache } from '../lib/browser';
+import { loadSettings, loadCache } from '../lib/browser';
 import {
   testConnection as apiTestConnection,
-  fetchAllBookmarks,
-  fetchAllArchivedBookmarks,
-  fetchBookmarksModifiedSince,
-  fetchArchivedBookmarksModifiedSince,
-  fetchAllTags,
   createBookmark as apiCreateBookmark,
   updateBookmark as apiUpdateBookmark,
   deleteBookmark as apiDeleteBookmark,
 } from '../lib/api';
-import {
-  getCache,
-  setCacheFromSync,
-  mergeBookmarksIntoCache,
-  setCacheError,
-  upsertBookmarkInCache,
-  removeBookmarkFromCache,
-} from '../lib/cache';
-import type { BgRequest, BgResponse, CacheState, Bookmark } from '../lib/types';
+import { setCacheError, upsertBookmarkInCache, removeBookmarkFromCache } from '../lib/cache';
+import { parseBgRequest } from '../lib/messages';
+import { fullSync, backgroundSync } from './sync';
+import type { BgResponse, Bookmark } from '../lib/types';
 import { EMPTY_CACHE } from '../lib/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,61 +30,15 @@ function fail(error: string): BgResponse<never> {
   return { ok: false, error };
 }
 
-// ─── Sync ─────────────────────────────────────────────────────────────────────
-//
-// Linkding's API has no way to list bookmarks *deleted* since a given time,
-// so an incremental (modified_since) sync alone can't detect those -- it
-// would let deleted bookmarks linger in the local cache indefinitely. So:
-// full syncs are used for the initial sync and any user-triggered refresh
-// (SYNC_BOOKMARKS), and also run periodically in place of the automatic
-// background refresh to reconcile deletions, bounding how stale the cache
-// can get for that one case. Everything else uses the cheap incremental path.
-
-const FULL_RESYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
-
-async function runFullSync(): Promise<CacheState> {
-  const settings = await loadSettings();
-  if (!settings?.serverUrl || !settings?.apiToken) {
-    throw new Error('Not configured. Open settings to connect your Linkding server.');
-  }
-
-  const [active, archived, tags] = await Promise.all([
-    fetchAllBookmarks(settings.serverUrl, settings.apiToken),
-    fetchAllArchivedBookmarks(settings.serverUrl, settings.apiToken),
-    fetchAllTags(settings.serverUrl, settings.apiToken),
-  ]);
-
-  return setCacheFromSync([...active, ...archived], tags);
-}
-
-async function runIncrementalSync(): Promise<CacheState> {
-  const settings = await loadSettings();
-  if (!settings?.serverUrl || !settings?.apiToken) {
-    throw new Error('Not configured. Open settings to connect your Linkding server.');
-  }
-
-  const current = await getCache();
-  const lastFullSyncMs = current.lastFullSyncAt ? new Date(current.lastFullSyncAt).getTime() : 0;
-  const dueForFullSync = Date.now() - lastFullSyncMs > FULL_RESYNC_INTERVAL_MS;
-
-  if (dueForFullSync || current.bookmarks.length === 0 || !current.lastSyncAt) {
-    return runFullSync();
-  }
-
-  const [changedActive, changedArchived, tags] = await Promise.all([
-    fetchBookmarksModifiedSince(settings.serverUrl, settings.apiToken, current.lastSyncAt),
-    fetchArchivedBookmarksModifiedSince(settings.serverUrl, settings.apiToken, current.lastSyncAt),
-    fetchAllTags(settings.serverUrl, settings.apiToken),
-  ]);
-
-  return mergeBookmarksIntoCache([...changedActive, ...changedArchived], tags);
-}
-
 // ─── Message handler ──────────────────────────────────────────────────────────
 
 browser.runtime.onMessage.addListener(
-  (rawMessage: unknown, _sender: browser.Runtime.MessageSender) => {
-    const msg = rawMessage as BgRequest;
+  (rawMessage: unknown, sender: browser.Runtime.MessageSender) => {
+    // Only the extension's own pages, and only well-formed requests;
+    // anything else gets no response (undefined).
+    if (sender.id !== browser.runtime.id) return undefined;
+    const msg = parseBgRequest(rawMessage);
+    if (!msg) return undefined;
 
     switch (msg.type) {
 
@@ -104,7 +48,7 @@ browser.runtime.onMessage.addListener(
           .catch((e: Error) => fail(e.message));
 
       case 'SYNC_BOOKMARKS':
-        return runFullSync()
+        return fullSync()
           .then((cache) => ok(cache))
           .catch(async (e: Error) => {
             await setCacheError(e.message);
@@ -116,11 +60,6 @@ browser.runtime.onMessage.addListener(
           .then((c) => ok(c ?? { ...EMPTY_CACHE }))
           .catch((e: Error) => fail(e.message));
       }
-
-      case 'CLEAR_CACHE':
-        return saveCache({ ...EMPTY_CACHE })
-          .then(() => ok(null))
-          .catch((e: Error) => fail(e.message));
 
       case 'CREATE_BOOKMARK':
         return loadSettings().then(async (settings) => {
@@ -167,7 +106,7 @@ browser.runtime.onMessage.addListener(
 browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'auto-refresh') {
     try {
-      await runIncrementalSync();
+      await backgroundSync();
     } catch (e) {
       // Record error in cache state; popup will show it on next open
       await setCacheError(e instanceof Error ? e.message : String(e));
@@ -194,5 +133,5 @@ browser.runtime.onStartup.addListener(initializeAlarm);
 browser.runtime.onInstalled.addListener(async () => {
   await initializeAlarm();
   // Attempt initial sync (will no-op if not yet configured)
-  try { await runFullSync(); } catch { /* not configured yet */ }
+  try { await fullSync(); } catch { /* not configured yet */ }
 });

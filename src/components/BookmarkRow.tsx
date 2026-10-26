@@ -1,6 +1,7 @@
 import React from 'react';
 import styles from './BookmarkRow.module.css';
 import { TagChip } from './TagChip';
+import { EditIcon, LinkIcon } from './Icons';
 import type { Bookmark } from '../lib/types';
 
 const MAX_VISIBLE_TAGS = 3;
@@ -66,6 +67,10 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
     const hiddenCount = bookmark.tagNames.length - visibleTags.length;
 
     return (
+      // An option in the search box's listbox: the keyboard reaches it
+      // through the combobox (arrows/Enter/F2 via aria-activedescendant),
+      // so the row itself only needs mouse handlers.
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events
       <div
         id={id}
         ref={ref}
@@ -97,7 +102,7 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
           <div className={styles.meta}>
             <span className={styles.host}>{getHostname(bookmark.url)}</span>
             {bookmark.isShared && (
-              <span className={styles.sharedBadge} title="Shared">🔗 Shared</span>
+              <span className={styles.sharedBadge} title="Shared"><LinkIcon width={11} height={11} /> Shared</span>
             )}
           </div>
           {visibleTags.length > 0 && (
@@ -134,7 +139,7 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
           aria-keyshortcuts="F2"
           tabIndex={-1}
         >
-          ✏
+          <EditIcon width={14} height={14} />
         </button>
       </div>
     );

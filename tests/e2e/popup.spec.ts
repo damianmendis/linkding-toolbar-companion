@@ -13,7 +13,7 @@ import { test, expect, makeApiBookmark } from './fixtures/extension';
 test.describe('Unconfigured state', () => {
   test('shows the connect-your-server screen when no settings exist', async ({ openPopup }) => {
     const popup = await openPopup();
-    await expect(popup.getByRole('heading', { name: 'Welcome to Linkding' })).toBeVisible();
+    await expect(popup.getByRole('heading', { name: 'Welcome to Linkding Toolbar Companion' })).toBeVisible();
     await expect(popup.getByRole('button', { name: 'Open settings' })).toBeVisible();
   });
 });
@@ -70,7 +70,7 @@ test.describe('Main view', () => {
     await expect(list.getByText('Delta Archived')).toBeVisible();
   });
 
-  test('keyboard navigation moves selection and Enter opens the selected row in a new tab', async ({ openPopup, context, mockServer }) => {
+  test('keyboard navigation moves selection and Enter opens the selected row in a new tab', async ({ openPopup, context }) => {
     const popup = await openPopup();
     const searchbox = popup.getByRole('combobox', { name: 'Search bookmarks' });
     // Row 0 (Alpha) is selected by default; move down to row 1 (Bravo).
@@ -163,14 +163,55 @@ test.describe('Edit bookmark view', () => {
     expect(mockServer.getBookmarks()[0].title).toBe('Alpha Article (edited)');
   });
 
+  test('clearing the notes field clears them on the server', async ({ openPopup, mockServer, seedSettings }) => {
+    mockServer.setBookmarks([
+      makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha Article', notes: 'Old notes' }),
+    ]);
+    await seedSettings(); // re-sync so the cache picks up the notes
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
+    await expect(popup.getByLabel('Notes')).toHaveValue('Old notes');
+    await popup.getByLabel('Notes').fill('');
+    await popup.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(popup.getByRole('listbox', { name: 'Bookmarks' })).toBeVisible();
+    expect(mockServer.getBookmarks()[0].notes).toBe('');
+  });
+
   test('deleting removes the bookmark after confirmation', async ({ openPopup, mockServer }) => {
     const popup = await openPopup();
     await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
     await popup.getByRole('button', { name: 'Delete', exact: true }).click();
-    await popup.getByRole('dialog', { name: 'Confirm action' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await popup.getByRole('alertdialog', { name: 'Confirm action' }).getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(popup.getByText('No bookmarks yet.')).toBeVisible();
     expect(mockServer.getBookmarks()).toHaveLength(0);
+  });
+
+  test('the delete confirmation takes focus, keeps Tab inside, and hands focus back on Escape', async ({ openPopup, mockServer }) => {
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
+    const deleteBtn = popup.getByRole('button', { name: 'Delete', exact: true });
+    await deleteBtn.click();
+
+    const confirm = popup.getByRole('alertdialog', { name: 'Confirm action' });
+    await expect(confirm).toHaveAccessibleDescription('Delete this bookmark? This cannot be undone.');
+    const cancel = confirm.getByRole('button', { name: 'Cancel' });
+    const confirmDelete = confirm.getByRole('button', { name: 'Delete', exact: true });
+    await expect(cancel).toBeFocused();
+
+    await popup.keyboard.press('Tab');
+    await expect(confirmDelete).toBeFocused();
+    await popup.keyboard.press('Tab');
+    await expect(cancel).toBeFocused(); // wraps instead of leaving the dialog
+    await popup.keyboard.press('Shift+Tab');
+    await expect(confirmDelete).toBeFocused();
+
+    await popup.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await expect(deleteBtn).toBeFocused();
+    await expect(popup.getByRole('dialog', { name: 'Edit bookmark' })).toBeVisible();
+    expect(mockServer.getBookmarks()).toHaveLength(1);
   });
 
   test('Cancel closes the modal without saving changes', async ({ openPopup, mockServer }) => {
@@ -196,8 +237,140 @@ test.describe('Edit bookmark view', () => {
   test('the active row is exposed to assistive tech via aria-activedescendant', async ({ openPopup }) => {
     const popup = await openPopup();
     const box = popup.getByRole('combobox', { name: 'Search bookmarks' });
+    // The rows (and so the attribute) appear once the popup has loaded its
+    // cache, which is async -- wait for it rather than reading it once.
+    await expect(box).toHaveAttribute('aria-activedescendant', /^bookmark-option-\d+$/);
     const activeId = await box.getAttribute('aria-activedescendant');
-    expect(activeId).toBeTruthy();
     await expect(popup.locator(`#${activeId}`)).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+test.describe('Permissions', () => {
+  test.beforeEach(async ({ seedSettings }) => {
+    await seedSettings();
+  });
+
+  test('the extension no longer requests the tabs permission', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const permissions = await page.evaluate(() => chrome.runtime.getManifest().permissions);
+    expect(permissions).not.toContain('tabs');
+    expect(permissions).toContain('activeTab');
+  });
+
+  test("other sites' tab URLs and titles stay unreadable, but the current tab can still be updated", async ({ context, extensionId, mockServer }) => {
+    const ext = await context.newPage();
+    await ext.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const other = await context.newPage();
+    await other.goto('data:text/html,<title>Private page</title>');
+    await other.bringToFront();
+
+    // The same query openUrl's current-tab mode and getActiveTab() make.
+    const active = await ext.evaluate(async () => {
+      const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return { id: t.id, url: t.url, title: t.title };
+    });
+    expect(active.id).toEqual(expect.any(Number));
+    expect(active.url).toBeUndefined(); // no tabs permission, no activeTab grant
+    expect(active.title).toBeUndefined();
+
+    await ext.evaluate(([id, url]) => chrome.tabs.update(id as number, { url: url as string }), [active.id, `${mockServer.origin}/bravo-page`]);
+    await expect.poll(() => other.url()).toContain('/bravo-page');
+  });
+});
+
+test.describe('Large result sets', () => {
+  test.beforeEach(async ({ mockServer, seedSettings }) => {
+    mockServer.setBookmarks(Array.from({ length: 120 }, (_, i) =>
+      makeApiBookmark({ id: i + 1, url: `https://items.example.com/${i + 1}`, title: `Item ${i + 1}` })));
+    await seedSettings();
+  });
+
+  test('search says how many matched and pages through them with Show more', async ({ openPopup }) => {
+    const popup = await openPopup();
+    await popup.getByRole('combobox', { name: 'Search bookmarks' }).fill('Item');
+    const list = popup.getByRole('listbox', { name: 'Bookmarks' });
+
+    await expect(popup.getByText('50 of 120 results')).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(50);
+
+    await popup.getByRole('button', { name: 'Show 50 more' }).click();
+    await expect(popup.getByText('100 of 120 results')).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(100);
+
+    await popup.getByRole('button', { name: 'Show 20 more' }).click();
+    await expect(popup.getByText('120 results', { exact: true })).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(120);
+    await expect(popup.getByRole('button', { name: /^Show \d+ more$/ })).toHaveCount(0);
+  });
+});
+
+test.describe('Settings page', () => {
+  test.beforeEach(async ({ mockServer, seedSettings }) => {
+    mockServer.setBookmarks([makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha' })]);
+    await seedSettings({ autoRefreshEnabled: true });
+  });
+
+  test('number fields keep what is typed, and Save stores the new values', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const recent = page.getByLabel('Recent bookmarks count');
+    await expect(recent).toHaveValue('20');
+
+    // Clearing used to snap straight back to 20, so the field couldn't be retyped.
+    await recent.fill('');
+    await expect(recent).toHaveValue('');
+    await recent.fill('35');
+    await page.getByLabel('Refresh interval (minutes)').fill('15');
+
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByText('✓ Saved')).toBeVisible();
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    expect(saved.recentCount).toBe(35);
+    expect(saved.autoRefreshMinutes).toBe(15);
+  });
+
+  test('first-time setup: saving the server and token syncs bookmarks straight away', async ({ context, extensionId, mockServer }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    // Start from a fresh install: no settings, no cache.
+    await page.evaluate(() => chrome.storage.local.clear());
+    await page.reload();
+
+    await page.getByLabel('Linkding server URL').fill(mockServer.origin);
+    await page.getByLabel('API token').fill('test-token');
+    await page.getByRole('button', { name: 'Save settings' }).click();
+
+    await expect(page.getByText('✓ Refreshed')).toBeVisible();
+    const cache = await page.evaluate(async () => (await chrome.storage.local.get('cache')).cache);
+    expect(cache.bookmarks.map((b: { title: string }) => b.title)).toEqual(['Alpha']);
+  });
+
+  test('the browser refuses an out-of-range value before anything is saved', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const recent = page.getByLabel('Recent bookmarks count');
+    await expect(recent).toHaveValue('20');
+    await recent.fill('500');
+    await page.getByRole('button', { name: 'Save settings' }).click();
+
+    expect(await recent.evaluate((el: HTMLInputElement) => el.validity.rangeOverflow)).toBe(true);
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    expect(saved.recentCount).toBe(20);
+  });
+});
+
+test.describe('Server unreachable', () => {
+  test('a switched-off server is reported as unreachable, not as a generic sync failure', async ({ mockServer, seedSettings, openPopup }) => {
+    mockServer.setBookmarks([makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha' })]);
+    await seedSettings();
+    await mockServer.close(); // the "home server" goes down after the first sync
+
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: 'Refresh bookmarks' }).click();
+
+    await expect(popup.getByRole('status').filter({ hasText: 'showing cached bookmarks' }))
+      .toHaveText(/Can.t reach your server/);
+    await expect(popup.getByRole('listbox', { name: 'Bookmarks' }).getByText('Alpha')).toBeVisible();
   });
 });

@@ -1,0 +1,24 @@
+# Keeps npm dependencies and the SHA-pinned GitHub Actions in ci.yml up to
+# date. Dependabot rewrites a pinned SHA and its trailing "# vX.Y.Z" comment
+# together, so pins never go stale silently.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine dev-tooling bumps instead of one per package;
+      # major versions still arrive individually so they get a proper look.
+      dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

@@ -7,6 +7,7 @@
 import browser from 'webextension-polyfill';
 import type { Settings, CacheState, BgRequest, BgResponse } from './types';
 import { STORAGE_KEYS } from './types';
+import { isWebUrl } from './validators';
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ export interface ActiveTabInfo {
   title: string;
 }
 
+// No `tabs` permission: the current tab's url/title are readable only
+// through activeTab, which the browser grants when the user opens the popup.
+// Opening and updating tabs needs no permission at all.
 export async function getActiveTab(): Promise<ActiveTabInfo | null> {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -79,6 +83,7 @@ export async function getActiveTab(): Promise<ActiveTabInfo | null> {
 }
 
 export async function openUrl(url: string, mode: 'new-tab' | 'current-tab'): Promise<void> {
+  if (!isWebUrl(url)) throw new Error('Only http and https bookmarks can be opened.');
   if (mode === 'new-tab') {
     await browser.tabs.create({ url });
   } else {

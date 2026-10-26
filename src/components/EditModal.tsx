@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import styles from './EditModal.module.css';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
+import { CloseIcon } from './Icons';
 import type { Bookmark } from '../lib/types';
 
 interface EditModalProps {
@@ -26,6 +27,7 @@ export function EditModal({
   const [notes, setNotes] = useState(bookmark.notes ?? '');
   const [tags, setTags] = useState(bookmark.tagNames.join(', '));
   const [showConfirm, setShowConfirm] = useState(false);
+  const deleteBtnRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState('');
 
   async function handleSave(e: React.FormEvent) {
@@ -35,7 +37,9 @@ export function EditModal({
       await onSave({
         title: title.trim(),
         url: url.trim(),
-        notes: notes.trim() || undefined,
+        // '' rather than undefined: an omitted field is left unchanged by
+        // the PATCH, so clearing the notes would otherwise do nothing.
+        notes: notes.trim(),
         tagNames: tags.split(',').map((t) => t.trim()).filter(Boolean),
       });
     } catch (err) {
@@ -43,12 +47,19 @@ export function EditModal({
     }
   }
 
+  // Closing the confirmation returns focus to the Delete button that opened
+  // it, rather than leaving it on the removed dialog (i.e. the page body).
+  function closeConfirm() {
+    setShowConfirm(false);
+    requestAnimationFrame(() => deleteBtnRef.current?.focus());
+  }
+
   async function handleDelete() {
     try {
       await onDelete();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete.');
-      setShowConfirm(false);
+      closeConfirm();
     }
   }
 
@@ -56,13 +67,15 @@ export function EditModal({
     if (e.key !== 'Escape') return;
     e.stopPropagation();
     if (showConfirm) {
-      setShowConfirm(false);
+      closeConfirm();
     } else {
       onCancel();
     }
   }
 
   return (
+    // Escape-to-close on the dialog itself, per the WAI-ARIA dialog pattern.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={styles.overlay}
       role="dialog"
@@ -79,7 +92,7 @@ export function EditModal({
             onClick={onCancel}
             aria-label="Close"
           >
-            ✕
+            <CloseIcon width={14} height={14} />
           </button>
         </header>
 
@@ -92,6 +105,9 @@ export function EditModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Page title"
+              // Moving focus into a newly opened dialog is the WAI-ARIA
+              // dialog pattern, not an unexpected focus jump.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
           </div>
@@ -134,6 +150,7 @@ export function EditModal({
 
           <div className={styles.actions}>
             <button
+              ref={deleteBtnRef}
               type="button"
               className={styles.deleteBtn}
               onClick={() => setShowConfirm(true)}
@@ -158,7 +175,7 @@ export function EditModal({
           message="Delete this bookmark? This cannot be undone."
           confirmLabel="Delete"
           onConfirm={handleDelete}
-          onCancel={() => setShowConfirm(false)}
+          onCancel={closeConfirm}
           loading={deleting}
         />
       )}
