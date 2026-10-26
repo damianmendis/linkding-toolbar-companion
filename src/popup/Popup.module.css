@@ -36,9 +36,10 @@
 .searchIcon {
   position: absolute;
   left: 8px;
-  font-size: 12px;
   pointer-events: none;
-  opacity: 0.5;
+  /* Same token as the placeholder text; full opacity keeps it >= 3:1
+     against the input in both themes (the old emoji at 0.5 was ~1.9:1). */
+  color: var(--color-text-muted);
 }
 
 .searchInput {

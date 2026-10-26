@@ -5,6 +5,12 @@ forms. Paste directly into the relevant fields; character limits are called
 out where the store enforces one. Update the repo URLs throughout if/when
 the repo is renamed.
 
+**Status:**
+
+- **Firefox Add-ons (AMO):** live at https://addons.mozilla.org/en-US/firefox/addon/linkding-toolbar-companion/
+  (add-on ID `linkding-toolbar-companion@example.com`).
+- **Chrome Web Store:** to do (see Still needed before submission below).
+
 ---
 
 ## Shared identity
@@ -158,6 +164,9 @@ is the one to actually upload.
 
 ## Still needed before submission
 
-- A Chrome Web Store developer account ($5 one-time registration fee) and a
-  Firefox/Mozilla add-on developer account — both need to be created by you;
-  not something that can be done on your behalf.
+- **Chrome:** a Chrome Web Store developer account ($5 one-time
+  registration fee) -- needs to be created by you; not something that can
+  be done on your behalf.
+- **Firefox:** done (see Status at the top). New versions are uploaded to
+  the existing AMO listing, with a fresh `npm run package:source` archive
+  each time, since the build bundles/minifies.

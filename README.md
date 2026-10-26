@@ -4,7 +4,7 @@ An unofficial, lightweight browser extension for [Linkding](https://github.com/s
 
 > Not affiliated with or endorsed by the Linkding project.
 
-![Version](https://img.shields.io/github/v/release/damianmendis/linkding-toolbar-companion?label=version) ![License](https://img.shields.io/badge/license-MIT-green) ![MV3](https://img.shields.io/badge/manifest-v3-orange)
+![Version](https://img.shields.io/github/v/release/damianmendis/linkding-toolbar-companion?label=version) ![License](https://img.shields.io/badge/license-MIT-green) ![MV3](https://img.shields.io/badge/manifest-v3-orange) [![Firefox Add-on](https://img.shields.io/amo/v/linkding-toolbar-companion?label=firefox%20add-on&logo=firefoxbrowser)](https://addons.mozilla.org/en-US/firefox/addon/linkding-toolbar-companion/)
 
 ---
 
@@ -23,7 +23,7 @@ An unofficial, lightweight browser extension for [Linkding](https://github.com/s
 
 - A running [Linkding](https://github.com/sissbruecker/linkding) instance (self-hosted)
 - Your Linkding API token (found under **Settings → Integrations → REST API**)
-- Chrome 109+, Edge 109+, or Firefox 109+
+- Chrome 109+, Edge 109+, or Firefox 142+
 
 ---
 
@@ -39,12 +39,19 @@ An unofficial, lightweight browser extension for [Linkding](https://github.com/s
 
 ### Firefox
 
+Install from **[Firefox Add-ons (addons.mozilla.org)](https://addons.mozilla.org/en-US/firefox/addon/linkding-toolbar-companion/)** and click **Add to Firefox**. Updates are installed automatically.
+
+<details>
+<summary>Manual install (testing a build from GitHub Releases)</summary>
+
 1. Download **[linkding-toolbar-companion-firefox.zip](https://github.com/damianmendis/linkding-toolbar-companion/releases/latest/download/linkding-toolbar-companion-firefox.zip)** (always the latest release)
 2. Go to `about:debugging#/runtime/this-firefox`
 3. Click **Load Temporary Add-on**
 4. Select the zip file directly
 
-> **Note:** Firefox temporary add-ons are removed when the browser restarts. Permanent installation requires submission to the Firefox Add-on store (planned for a future release).
+Temporary add-ons are removed when Firefox restarts.
+
+</details>
 
 ---
 
