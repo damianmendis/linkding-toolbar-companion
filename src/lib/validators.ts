@@ -1,18 +1,24 @@
+// Names that only resolve inside a local network (RFC 6762 .local, RFC 8375
+// .home.arpa, ICANN-reserved .internal, and the common router default .lan).
+const LOCAL_SUFFIXES = ['.local', '.lan', '.home.arpa', '.internal'];
+
 /**
  * True if `hostname` (as returned by URL#hostname) is a loopback, private-
- * network, link-local, or mDNS (.local) address -- the kind of host a
- * self-hosted Linkding instance on a home/office LAN is typically reached
- * at, where plain HTTP doesn't cross the open internet and a TLS
- * certificate usually isn't available.
+ * network, shared-address (CGNAT/Tailscale), link-local, or local-only name
+ * -- the kind of host a self-hosted Linkding instance on a home/office LAN
+ * or tailnet is typically reached at, where plain HTTP doesn't cross the
+ * open internet and a TLS certificate usually isn't available.
  */
 export function isPrivateOrLocalHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
 
   if (host === 'localhost' || host === '::1' || host === '[::1]') return true;
-  if (host.endsWith('.local')) return true;
+  if (LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
 
   // IPv6 unique local addresses (fc00::/7, i.e. fc.. or fd.. prefixes)
   if (/^\[?f[cd][0-9a-f]{2}:/i.test(host)) return true;
+  // IPv6 link-local (fe80::/10)
+  if (/^\[?fe[89ab][0-9a-f]:/i.test(host)) return true;
 
   const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
@@ -23,8 +29,13 @@ export function isPrivateOrLocalHost(hostname: string): boolean {
     if (a === 172 && b >= 16 && b <= 31) return true; // private (172.16.0.0/12)
     if (a === 192 && b === 168) return true; // private (192.168.0.0/16)
     if (a === 169 && b === 254) return true; // link-local (169.254.0.0/16)
+    if (a === 100 && b >= 64 && b <= 127) return true; // shared/CGNAT, Tailscale (100.64.0.0/10)
     return false;
   }
+
+  // A single-label name ("nas", "linkding") can only resolve through local
+  // DNS or the hosts file. IPv6 literals contain ':' and are handled above.
+  if (!host.includes('.') && !host.includes(':')) return true;
 
   return false;
 }
@@ -53,7 +64,7 @@ export function validateServerUrl(raw: string): string {
   // servers are rarely fronted by a TLS certificate).
   if (url.protocol === 'http:' && !isDev() && !isPrivateOrLocalHost(url.hostname)) {
     throw new Error(
-      'Server URL must use HTTPS, unless it points to a local network address (localhost, a private IP, or a .local hostname).'
+      'Server URL must use HTTPS, unless it points to a local network address (localhost, a private or Tailscale IP, a single-word hostname, or a .local, .lan, .home.arpa or .internal name).'
     );
   }
 
@@ -73,6 +84,19 @@ export function isWebUrl(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Parses a whole-number settings field, keeping the raw text until save so
+ * the input can be cleared and retyped without snapping back to a default.
+ */
+export function validateWholeNumber(raw: string, label: string, min: number, max: number): number {
+  const trimmed = raw.trim();
+  const n = /^\d+$/.test(trimmed) ? Number(trimmed) : NaN;
+  if (!(n >= min && n <= max)) {
+    throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
+  }
+  return n;
 }
 
 export function validateApiToken(token: string): string {

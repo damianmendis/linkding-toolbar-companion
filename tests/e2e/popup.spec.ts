@@ -250,3 +250,68 @@ test.describe('Permissions', () => {
     await expect.poll(() => other.url()).toContain('/bravo-page');
   });
 });
+
+test.describe('Large result sets', () => {
+  test.beforeEach(async ({ mockServer, seedSettings }) => {
+    mockServer.setBookmarks(Array.from({ length: 120 }, (_, i) =>
+      makeApiBookmark({ id: i + 1, url: `https://items.example.com/${i + 1}`, title: `Item ${i + 1}` })));
+    await seedSettings();
+  });
+
+  test('search says how many matched and pages through them with Show more', async ({ openPopup }) => {
+    const popup = await openPopup();
+    await popup.getByRole('combobox', { name: 'Search bookmarks' }).fill('Item');
+    const list = popup.getByRole('listbox', { name: 'Bookmarks' });
+
+    await expect(popup.getByText('50 of 120 results')).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(50);
+
+    await popup.getByRole('button', { name: 'Show 50 more' }).click();
+    await expect(popup.getByText('100 of 120 results')).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(100);
+
+    await popup.getByRole('button', { name: 'Show 20 more' }).click();
+    await expect(popup.getByText('120 results', { exact: true })).toBeVisible();
+    await expect(list.getByRole('option')).toHaveCount(120);
+    await expect(popup.getByRole('button', { name: /^Show \d+ more$/ })).toHaveCount(0);
+  });
+});
+
+test.describe('Settings page', () => {
+  test.beforeEach(async ({ mockServer, seedSettings }) => {
+    mockServer.setBookmarks([makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha' })]);
+    await seedSettings({ autoRefreshEnabled: true });
+  });
+
+  test('number fields keep what is typed, and Save stores the new values', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const recent = page.getByLabel('Recent bookmarks count');
+    await expect(recent).toHaveValue('20');
+
+    // Clearing used to snap straight back to 20, so the field couldn't be retyped.
+    await recent.fill('');
+    await expect(recent).toHaveValue('');
+    await recent.fill('35');
+    await page.getByLabel('Refresh interval (minutes)').fill('15');
+
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByText('✓ Saved')).toBeVisible();
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    expect(saved.recentCount).toBe(35);
+    expect(saved.autoRefreshMinutes).toBe(15);
+  });
+
+  test('the browser refuses an out-of-range value before anything is saved', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options/index.html`);
+    const recent = page.getByLabel('Recent bookmarks count');
+    await expect(recent).toHaveValue('20');
+    await recent.fill('500');
+    await page.getByRole('button', { name: 'Save settings' }).click();
+
+    expect(await recent.evaluate((el: HTMLInputElement) => el.validity.rangeOverflow)).toBe(true);
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    expect(saved.recentCount).toBe(20);
+  });
+});

@@ -148,6 +148,20 @@
   overflow-x: hidden;
 }
 
+.showMoreBtn {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-accent);
+  border-top: 1px solid var(--color-border);
+  transition: background var(--transition);
+}
+.showMoreBtn:hover {
+  background: var(--color-surface-hover);
+}
+
 .placeholder {
   display: flex;
   flex-direction: column;

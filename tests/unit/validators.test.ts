@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateServerUrl, validateApiToken, isPrivateOrLocalHost, isWebUrl } from '../../src/lib/validators';
+import { validateServerUrl, validateApiToken, isPrivateOrLocalHost, isWebUrl, validateWholeNumber } from '../../src/lib/validators';
 
 describe('validateServerUrl', () => {
   it('accepts valid https URL', () => {
@@ -92,5 +92,52 @@ describe('isWebUrl', () => {
     expect(isWebUrl('data:text/html,<script>alert(1)</script>')).toBe(false);
     expect(isWebUrl('file:///etc/passwd')).toBe(false);
     expect(isWebUrl('not a url')).toBe(false);
+  });
+});
+
+describe('isPrivateOrLocalHost -- home-network and tailnet addresses', () => {
+  it('accepts shared-address space used by Tailscale and CGNAT (100.64.0.0/10)', () => {
+    expect(isPrivateOrLocalHost('100.64.0.1')).toBe(true);
+    expect(isPrivateOrLocalHost('100.101.102.103')).toBe(true);
+    expect(isPrivateOrLocalHost('100.127.255.255')).toBe(true);
+    expect(isPrivateOrLocalHost('100.63.255.255')).toBe(false); // just below the range
+    expect(isPrivateOrLocalHost('100.128.0.1')).toBe(false); // just above it
+  });
+
+  it('accepts IPv6 link-local and unique local addresses', () => {
+    expect(isPrivateOrLocalHost('[fe80::1]')).toBe(true);
+    expect(isPrivateOrLocalHost('[febf::1]')).toBe(true);
+    expect(isPrivateOrLocalHost('[fd12:3456::1]')).toBe(true);
+    expect(isPrivateOrLocalHost('[2001:db8::1]')).toBe(false);
+  });
+
+  it('accepts local-only names and single-label hostnames', () => {
+    for (const host of ['nas.lan', 'links.home.arpa', 'linkding.internal', 'nas', 'linkding']) {
+      expect(isPrivateOrLocalHost(host)).toBe(true);
+    }
+  });
+
+  it('still rejects public names that only contain a local word', () => {
+    for (const host of ['lan.example.com', 'internal.example.com', 'example.local.com', 'mylan.com']) {
+      expect(isPrivateOrLocalHost(host)).toBe(false);
+    }
+  });
+
+  // validateServerUrl isn't tested here for these: Vitest builds with
+  // import.meta.env.DEV = true, compiled in as a constant, which skips its
+  // HTTPS check entirely (see isDev). isPrivateOrLocalHost is the decision
+  // that check delegates to, so it carries the coverage.
+});
+
+describe('validateWholeNumber', () => {
+  it('accepts whole numbers within range', () => {
+    expect(validateWholeNumber('1', 'Count', 1, 200)).toBe(1);
+    expect(validateWholeNumber(' 200 ', 'Count', 1, 200)).toBe(200);
+  });
+
+  it('rejects empty, out-of-range, fractional and non-numeric input', () => {
+    for (const raw of ['', '0', '201', '-5', '2.5', '1e2', 'abc']) {
+      expect(() => validateWholeNumber(raw, 'Count', 1, 200)).toThrow('Count must be a whole number from 1 to 200.');
+    }
   });
 });

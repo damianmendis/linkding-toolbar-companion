@@ -3,7 +3,7 @@ import styles from '../Popup.module.css';
 import { BookmarkRow } from '../../components/BookmarkRow';
 import { StatusBar } from '../../components/StatusBar';
 import { PlusIcon, RefreshIcon, SearchIcon, SettingsIcon } from '../../components/Icons';
-import { searchBookmarks, getRecent, describeQuery } from '../../lib/search';
+import { searchAll, getRecent, describeQuery, RESULTS_PAGE_SIZE } from '../../lib/search';
 import type { Bookmark, CacheState, Settings } from '../../lib/types';
 
 interface MainViewProps {
@@ -31,6 +31,7 @@ export function MainView({
 }: MainViewProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [limit, setLimit] = useState(RESULTS_PAGE_SIZE);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -38,6 +39,13 @@ export function MainView({
   useEffect(() => {
     setTimeout(() => searchRef.current?.focus(), 50);
   }, []);
+
+  // Every match, so the label can say how many there are; only the first
+  // `limit` are rendered, and "Show more" raises it a page at a time.
+  const allMatches = useMemo(
+    () => (cache && query.trim() ? searchAll(cache.bookmarks, query) : []),
+    [cache, query]
+  );
 
   const displayResults = useMemo(() => {
     if (!cache) return [];
@@ -49,10 +57,22 @@ export function MainView({
         titleMatchLength: 0,
       }));
     }
-    return searchBookmarks(cache.bookmarks, query);
-  }, [cache, query, settings?.recentCount]);
+    return allMatches.slice(0, limit);
+  }, [cache, query, settings?.recentCount, allMatches, limit]);
 
-  useEffect(() => { setActiveIndex(0); }, [displayResults]);
+  const hiddenCount = query.trim() ? allMatches.length - displayResults.length : 0;
+
+  // A new search (or a sync) starts again from the top; showing more keeps
+  // the current selection.
+  useEffect(() => {
+    setActiveIndex(0);
+    setLimit(RESULTS_PAGE_SIZE);
+  }, [cache, query]);
+
+  function handleShowMore() {
+    setLimit((n) => n + RESULTS_PAGE_SIZE);
+    searchRef.current?.focus();
+  }
 
   function handleFilterTag(tag: string) {
     setQuery(`#${tag}`);
@@ -142,13 +162,16 @@ export function MainView({
         {query
           ? (() => {
               const label = describeQuery(query);
-              const count = `${displayResults.length} ${label ? 'bookmark' : 'result'}${displayResults.length !== 1 ? 's' : ''}`;
+              const total = allMatches.length;
+              const noun = `${label ? 'bookmark' : 'result'}${total !== 1 ? 's' : ''}`;
+              const count = hiddenCount > 0 ? `${displayResults.length} of ${total} ${noun}` : `${total} ${noun}`;
               return label ? `${label} — ${count}` : count;
             })()
           : 'Recent bookmarks'}
       </div>
 
-      <div id="bookmark-list" className={styles.list} role="listbox" aria-label="Bookmarks">
+      <div className={styles.list}>
+      <div id="bookmark-list" role="listbox" aria-label="Bookmarks">
         {cache === null && (
           <div className={styles.placeholder}>
             <span className={styles.spinner} aria-label="Loading…" />
@@ -181,6 +204,12 @@ export function MainView({
             onFilterTag={handleFilterTag}
           />
         ))}
+      </div>
+        {hiddenCount > 0 && (
+          <button type="button" className={styles.showMoreBtn} onClick={handleShowMore}>
+            Show {Math.min(RESULTS_PAGE_SIZE, hiddenCount)} more
+          </button>
+        )}
       </div>
 
       <div className={styles.footer}>

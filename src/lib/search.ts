@@ -22,12 +22,14 @@
  * matching Linkding's own default list, which excludes them unless you ask
  * for `!archived` specifically.
  *
- * Returns results sorted by score (or most-recent, for modifier filters)
- * descending, capped at 50 items.
+ * searchAll() returns every match, sorted by score (or most-recent, for
+ * modifier filters) descending; searchBookmarks() returns the first `limit`
+ * of those (50 by default), for callers that page through them.
  */
 import type { Bookmark } from './types';
 
-const MAX_RESULTS = 50;
+/** How many results the popup shows at a time. */
+export const RESULTS_PAGE_SIZE = 50;
 
 interface ScoredBookmark {
   bookmark: Bookmark;
@@ -99,14 +101,18 @@ function hostname(url: string): string {
 function byMostRecent(bookmarks: Bookmark[]): SearchResult[] {
   return [...bookmarks]
     .sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''))
-    .slice(0, MAX_RESULTS)
     .map((bookmark) => ({ bookmark, titleMatchIndex: -1, titleMatchLength: 0 }));
 }
 
 export function searchBookmarks(
   bookmarks: Bookmark[],
-  query: string
+  query: string,
+  limit = RESULTS_PAGE_SIZE
 ): SearchResult[] {
+  return searchAll(bookmarks, query).slice(0, limit);
+}
+
+export function searchAll(bookmarks: Bookmark[], query: string): SearchResult[] {
   const q = query.trim();
   if (!q) return [];
 
@@ -182,7 +188,6 @@ export function searchBookmarks(
 
   return scored
     .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RESULTS)
     .map(({ bookmark, titleMatchIndex, titleMatchLength }) => ({
       bookmark,
       titleMatchIndex,

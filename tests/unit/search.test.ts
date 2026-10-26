@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { searchBookmarks, getRecent, isTagQuery, parseQuery } from '../../src/lib/search';
+import { searchBookmarks, searchAll, getRecent, isTagQuery, parseQuery } from '../../src/lib/search';
 import type { Bookmark } from '../../src/lib/types';
 
 function bm(id: number, overrides: Partial<Bookmark> = {}): Bookmark {
@@ -62,6 +62,17 @@ describe('searchBookmarks', () => {
     );
     const results = searchBookmarks(many, 'test');
     expect(results.length).toBeLessThanOrEqual(50);
+  });
+
+  it('searchAll returns every match, uncapped, for text and modifier queries', () => {
+    const many = Array.from({ length: 120 }, (_, i) =>
+      bm(i, { title: `test item ${i}`, isUnread: true })
+    );
+    expect(searchAll(many, 'test')).toHaveLength(120);
+    expect(searchAll(many, '!unread')).toHaveLength(120);
+    expect(searchBookmarks(many, 'test', 100)).toHaveLength(100);
+    expect(searchBookmarks(many, 'test', 100).map((r) => r.bookmark.id))
+      .toEqual(searchAll(many, 'test').slice(0, 100).map((r) => r.bookmark.id));
   });
 
   it('#tag filters to exact tag matches only, excluding text/notes hits', () => {

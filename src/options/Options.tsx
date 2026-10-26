@@ -17,7 +17,7 @@ import {
   requestServerPermission,
 } from '../lib/browser';
 import { clearCache, getCache } from '../lib/cache';
-import { validateServerUrl, validateApiToken } from '../lib/validators';
+import { validateServerUrl, validateApiToken, validateWholeNumber } from '../lib/validators';
 import type { Settings, CacheState } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/types';
 
@@ -25,14 +25,24 @@ type ConnectionStatus = 'idle' | 'testing' | 'success' | 'error';
 type SyncStatus = 'idle' | 'syncing' | 'done' | 'error';
 type ClearStatus = 'idle' | 'clearing' | 'done';
 
+function wholeNumberOr(raw: string, min: number, max: number, fallback: number): number {
+  try {
+    return validateWholeNumber(raw, '', min, max);
+  } catch {
+    return fallback;
+  }
+}
+
 export function Options() {
   const [serverUrl, setServerUrl] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [openMode, setOpenMode] = useState<Settings['openMode']>('new-tab');
-  const [recentCount, setRecentCount] = useState(20);
+  // Kept as typed (strings) and parsed on save; see validateWholeNumber.
+  const [recentCount, setRecentCount] = useState('20');
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState(5);
+  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState('5');
 
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [connStatus, setConnStatus] = useState<ConnectionStatus>('idle');
@@ -50,9 +60,9 @@ export function Options() {
       setServerUrl(s.serverUrl ?? '');
       setApiToken(s.apiToken ?? '');
       setOpenMode(s.openMode ?? 'new-tab');
-      setRecentCount(s.recentCount ?? 20);
+      setRecentCount(String(s.recentCount ?? 20));
       setAutoRefreshEnabled(s.autoRefreshEnabled ?? true);
-      setAutoRefreshMinutes(s.autoRefreshMinutes ?? 5);
+      setAutoRefreshMinutes(String(s.autoRefreshMinutes ?? 5));
 
       // A server was configured previously but the extension may no longer
       // hold host permission for it (e.g. after updating from a version
@@ -73,14 +83,39 @@ export function Options() {
 
     let normalizedUrl: string;
     let normalizedToken: string;
+    let validRecentCount: number;
+    let validRefreshMinutes: number;
     try {
       normalizedUrl = validateServerUrl(serverUrl);
       normalizedToken = validateApiToken(apiToken);
+      validRecentCount = validateWholeNumber(recentCount, 'Recent bookmarks count', 1, 200);
+      // The interval field is hidden while auto-refresh is off, so don't
+      // block saving on it then -- just keep a usable value.
+      validRefreshMinutes = autoRefreshEnabled
+        ? validateWholeNumber(autoRefreshMinutes, 'Refresh interval', 1, 60)
+        : wholeNumberOr(autoRefreshMinutes, 1, 60, DEFAULT_SETTINGS.autoRefreshMinutes);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Validation error');
       return;
     }
 
+    setSaving(true);
+    try {
+      await saveAndSync(normalizedUrl, normalizedToken, validRecentCount, validRefreshMinutes);
+    } catch (err) {
+      setSaved(false);
+      setSaveError(`Couldn't save settings: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAndSync(
+    normalizedUrl: string,
+    normalizedToken: string,
+    validRecentCount: number,
+    validRefreshMinutes: number
+  ) {
     const granted = await requestServerPermission(normalizedUrl);
     if (!granted) {
       setSaveError('Permission denied. The extension needs access to your Linkding server to save these settings.');
@@ -92,9 +127,9 @@ export function Options() {
       serverUrl: normalizedUrl,
       apiToken: normalizedToken,
       openMode,
-      recentCount,
+      recentCount: validRecentCount,
       autoRefreshEnabled,
-      autoRefreshMinutes: autoRefreshMinutes < 1 ? DEFAULT_SETTINGS.autoRefreshMinutes : autoRefreshMinutes,
+      autoRefreshMinutes: validRefreshMinutes,
     };
 
     const previous = await loadSettings();
@@ -231,7 +266,8 @@ export function Options() {
             />
             <span className={styles.hint}>
               Base URL of your self-hosted Linkding instance. Must use HTTPS, unless it's a
-              local network address (localhost, a private IP, or a .local hostname).
+              local network address (localhost, a private or Tailscale IP, a single-word hostname,
+              or a .local, .lan, .home.arpa or .internal name).
             </span>
           </div>
 
@@ -286,8 +322,10 @@ export function Options() {
               type="number"
               min={1}
               max={200}
+              step={1}
+              required
               value={recentCount}
-              onChange={(e) => setRecentCount(parseInt(e.target.value, 10) || 20)}
+              onChange={(e) => setRecentCount(e.target.value)}
             />
             <span className={styles.hint}>Number of recent bookmarks shown when search is empty.</span>
           </div>
@@ -316,8 +354,10 @@ export function Options() {
                 type="number"
                 min={1}
                 max={60}
+                step={1}
+                required
                 value={autoRefreshMinutes}
-                onChange={(e) => setAutoRefreshMinutes(parseInt(e.target.value, 10) || 5)}
+                onChange={(e) => setAutoRefreshMinutes(e.target.value)}
               />
             </div>
           )}
@@ -326,7 +366,7 @@ export function Options() {
         {saveError && <p className={styles.formError} role="alert">{saveError}</p>}
 
         <div className={styles.saveRow}>
-          <Button type="submit" variant="primary">Save settings</Button>
+          <Button type="submit" variant="primary" loading={saving}>Save settings</Button>
           {saved && <span className={`${styles.badge} ${styles.badgeSuccess}`} role="status">✓ Saved</span>}
         </div>
       </form>
