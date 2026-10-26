@@ -1,6 +1,6 @@
 {
   "name": "linkding-toolbar-companion",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "engines": {
     "node": "^22.22.2 || >=24.15.0"

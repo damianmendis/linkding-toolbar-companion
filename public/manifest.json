@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Linkding Toolbar Companion",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Unofficial toolbar companion for Linkding. Search, save, and manage your self-hosted bookmarks without leaving the page you're on.",
   "permissions": [
     "storage",
