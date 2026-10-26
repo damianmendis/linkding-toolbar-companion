@@ -16,7 +16,7 @@ import {
   hasServerPermission,
   requestServerPermission,
 } from '../lib/browser';
-import { clearCache } from '../lib/cache';
+import { clearCache, getCache } from '../lib/cache';
 import { validateServerUrl, validateApiToken } from '../lib/validators';
 import type { Settings, CacheState } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/types';
@@ -97,6 +97,10 @@ export function Options() {
       autoRefreshMinutes: autoRefreshMinutes < 1 ? DEFAULT_SETTINGS.autoRefreshMinutes : autoRefreshMinutes,
     };
 
+    const previous = await loadSettings();
+    const serverChanged = previous?.serverUrl !== normalizedUrl;
+    const tokenChanged = previous?.apiToken !== normalizedToken;
+
     await saveSettings(settings);
 
     if (autoRefreshEnabled) {
@@ -105,8 +109,24 @@ export function Options() {
       await clearRefreshAlarm();
     }
 
+    // The cached bookmarks belong to the old server -- drop them so they
+    // never show alongside (or instead of) the new server's. This also
+    // resets lastSyncAt, so a failed sync below is retried on next save.
+    if (previous?.serverUrl && serverChanged) {
+      await clearCache();
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+
+    // Sync now rather than leaving the popup empty or stale until the next
+    // auto-refresh alarm: on first-time setup (lastSyncAt is only set by a
+    // successful sync, so a failed first attempt is retried on next save)
+    // and whenever the connection details change.
+    const cache = await getCache();
+    if (!cache.lastSyncAt || serverChanged || tokenChanged) {
+      await handleRefreshCache();
+    }
   }
 
   // ─── Test connection (routed through background to avoid CORS) ───────────
