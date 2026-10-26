@@ -237,8 +237,10 @@ test.describe('Edit bookmark view', () => {
   test('the active row is exposed to assistive tech via aria-activedescendant', async ({ openPopup }) => {
     const popup = await openPopup();
     const box = popup.getByRole('combobox', { name: 'Search bookmarks' });
+    // The rows (and so the attribute) appear once the popup has loaded its
+    // cache, which is async -- wait for it rather than reading it once.
+    await expect(box).toHaveAttribute('aria-activedescendant', /^bookmark-option-\d+$/);
     const activeId = await box.getAttribute('aria-activedescendant');
-    expect(activeId).toBeTruthy();
     await expect(popup.locator(`#${activeId}`)).toHaveAttribute('aria-selected', 'true');
   });
 });
