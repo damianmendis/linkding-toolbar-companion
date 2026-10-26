@@ -110,6 +110,12 @@ test.describe('Add bookmark view', () => {
     expect(mockServer.getBookmarks().some((b) => b.url === 'https://new.example.com/page')).toBe(true);
   });
 
+  test('the top-bar add button opens the add view', async ({ openPopup }) => {
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: 'Add bookmark', exact: true }).click();
+    await expect(popup.getByText('Save bookmark', { exact: true })).toBeVisible();
+  });
+
   test('Escape cancels back to the main view without saving', async ({ openPopup, mockServer }) => {
     const popup = await openPopup();
     await popup.getByRole('button', { name: 'Save current page to Linkding' }).click();

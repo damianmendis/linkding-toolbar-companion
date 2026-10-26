@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from '../Popup.module.css';
 import { BookmarkRow } from '../../components/BookmarkRow';
 import { StatusBar } from '../../components/StatusBar';
+import { PlusIcon, RefreshIcon, SearchIcon, SettingsIcon } from '../../components/Icons';
 import { searchBookmarks, getRecent, describeQuery } from '../../lib/search';
 import type { Bookmark, CacheState, Settings } from '../../lib/types';
 
@@ -59,7 +60,7 @@ export function MainView({
   }
 
   // Handles '/' anywhere in the view (bubbles up from whichever control has
-  // focus -- the sync/settings/add buttons, or the search box itself, which
+  // focus -- the add/sync/settings buttons, or the search box itself, which
   // just types the character normally since it's already focused there).
   function handleGlobalKeyDown(e: React.KeyboardEvent) {
     if (e.key === '/' && document.activeElement !== searchRef.current) {
@@ -110,7 +111,7 @@ export function MainView({
     <div className={styles.root} onKeyDown={handleGlobalKeyDown}>
       <div className={styles.topBar}>
         <div className={styles.searchWrapper}>
-          <span className={styles.searchIcon} aria-hidden="true">🔍</span>
+          <SearchIcon className={styles.searchIcon} width={14} height={14} />
           <input
             ref={searchRef}
             type="search"
@@ -132,8 +133,9 @@ export function MainView({
             <button type="button" className={styles.clearBtn} onClick={() => { setQuery(''); searchRef.current?.focus(); }} aria-label="Clear search">✕</button>
           )}
         </div>
-        <button type="button" className={styles.iconBtn} onClick={onSync} disabled={isSyncing || isOffline} aria-label="Refresh bookmarks" title="Refresh">↻</button>
-        <button type="button" className={styles.iconBtn} onClick={onOpenSettings} aria-label="Open settings" title="Settings">⚙</button>
+        <button type="button" className={styles.iconBtn} onClick={onOpenAdd} disabled={isOffline} aria-label="Add bookmark" title="Save current page"><PlusIcon /></button>
+        <button type="button" className={styles.iconBtn} onClick={onSync} disabled={isSyncing || isOffline} aria-label="Refresh bookmarks" title="Refresh"><RefreshIcon /></button>
+        <button type="button" className={styles.iconBtn} onClick={onOpenSettings} aria-label="Open settings" title="Settings"><SettingsIcon /></button>
       </div>
 
       <div className={styles.sectionLabel} aria-live="polite">
