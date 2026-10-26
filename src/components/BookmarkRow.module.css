@@ -66,6 +66,9 @@
 
 .sharedBadge {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }

@@ -76,8 +76,8 @@ Your settings and bookmark cache are stored locally in your browser. Nothing is 
 | Search bookmarks | Type in the search bar |
 | Open a bookmark | Click it, or press `Enter` |
 | Save current page | Click **+ Save current page** |
-| Edit a bookmark | Click the ✏ icon on any row |
-| Delete a bookmark | Click the ✏ icon, then **Delete**, and confirm |
+| Edit a bookmark | Click the pencil icon on any row |
+| Delete a bookmark | Click the pencil icon, then **Delete**, and confirm |
 | Refresh from server | Click ↻ in the popup header or go to Settings |
 | Open settings | Click the ⚙ icon in the popup header |
 

@@ -1,7 +1,7 @@
 /**
  * Inline SVG icons for icon-only buttons.
  *
- * Unicode symbols (↻, ⚙) aren't in most UI fonts, so the browser pulls each
+ * Unicode symbols (↻, ⚙, ✏, 🔗) aren't in most UI fonts, so the browser pulls each
  * one from whatever fallback font the OS has -- different glyphs end up at
  * visibly different sizes (or as colour emoji). SVGs render identically
  * everywhere and inherit the surrounding text colour via currentColor, so
@@ -55,6 +55,35 @@ export function SearchIcon(props: IconProps) {
     <Icon {...props}>
       <circle cx="7" cy="7" r="4.25" />
       <path d="M10.25 10.25 13.5 13.5" />
+    </Icon>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </Icon>
+  );
+}
+
+export function EditIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      {/* pencil: body from bottom-left to top-right, with the tip at 2.5,13.5 */}
+      <path d="M10.5 2.5l3 3-8 8H2.5v-3z" />
+      <path d="M9 4l3 3" />
+    </Icon>
+  );
+}
+
+export function LinkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      {/* two interlocking chain links */}
+      <path d="M6.5 9.5l3-3" />
+      <path d="M7.5 4.5l1-1a2.83 2.83 0 0 1 4 4l-1 1" />
+      <path d="M8.5 11.5l-1 1a2.83 2.83 0 0 1-4-4l1-1" />
     </Icon>
   );
 }

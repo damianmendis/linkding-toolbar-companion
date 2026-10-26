@@ -1,6 +1,7 @@
 import React from 'react';
 import styles from './BookmarkRow.module.css';
 import { TagChip } from './TagChip';
+import { EditIcon, LinkIcon } from './Icons';
 import type { Bookmark } from '../lib/types';
 
 const MAX_VISIBLE_TAGS = 3;
@@ -101,7 +102,7 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
           <div className={styles.meta}>
             <span className={styles.host}>{getHostname(bookmark.url)}</span>
             {bookmark.isShared && (
-              <span className={styles.sharedBadge} title="Shared">🔗 Shared</span>
+              <span className={styles.sharedBadge} title="Shared"><LinkIcon width={11} height={11} /> Shared</span>
             )}
           </div>
           {visibleTags.length > 0 && (
@@ -138,7 +139,7 @@ export const BookmarkRow = React.forwardRef<HTMLDivElement, BookmarkRowProps>(
           aria-keyshortcuts="F2"
           tabIndex={-1}
         >
-          ✏
+          <EditIcon width={14} height={14} />
         </button>
       </div>
     );

@@ -92,7 +92,10 @@ export function Popup() {
     setIsSyncing(true);
     try {
       const resp = await sendToBackground<CacheState>({ type: 'SYNC_BOOKMARKS' }) as SyncResponse;
+      // A failed sync records its error in the stored cache; re-read it so
+      // the status bar says so instead of still showing the last success.
       if (resp.ok) setCache(resp.data);
+      else await refreshCache();
     } finally {
       setIsSyncing(false);
     }

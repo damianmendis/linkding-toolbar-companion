@@ -13,7 +13,7 @@ import { test, expect, makeApiBookmark } from './fixtures/extension';
 test.describe('Unconfigured state', () => {
   test('shows the connect-your-server screen when no settings exist', async ({ openPopup }) => {
     const popup = await openPopup();
-    await expect(popup.getByRole('heading', { name: 'Welcome to Linkding' })).toBeVisible();
+    await expect(popup.getByRole('heading', { name: 'Welcome to Linkding Toolbar Companion' })).toBeVisible();
     await expect(popup.getByRole('button', { name: 'Open settings' })).toBeVisible();
   });
 });
@@ -182,10 +182,36 @@ test.describe('Edit bookmark view', () => {
     const popup = await openPopup();
     await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
     await popup.getByRole('button', { name: 'Delete', exact: true }).click();
-    await popup.getByRole('dialog', { name: 'Confirm action' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await popup.getByRole('alertdialog', { name: 'Confirm action' }).getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(popup.getByText('No bookmarks yet.')).toBeVisible();
     expect(mockServer.getBookmarks()).toHaveLength(0);
+  });
+
+  test('the delete confirmation takes focus, keeps Tab inside, and hands focus back on Escape', async ({ openPopup, mockServer }) => {
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: /^Edit bookmark:/ }).click();
+    const deleteBtn = popup.getByRole('button', { name: 'Delete', exact: true });
+    await deleteBtn.click();
+
+    const confirm = popup.getByRole('alertdialog', { name: 'Confirm action' });
+    await expect(confirm).toHaveAccessibleDescription('Delete this bookmark? This cannot be undone.');
+    const cancel = confirm.getByRole('button', { name: 'Cancel' });
+    const confirmDelete = confirm.getByRole('button', { name: 'Delete', exact: true });
+    await expect(cancel).toBeFocused();
+
+    await popup.keyboard.press('Tab');
+    await expect(confirmDelete).toBeFocused();
+    await popup.keyboard.press('Tab');
+    await expect(cancel).toBeFocused(); // wraps instead of leaving the dialog
+    await popup.keyboard.press('Shift+Tab');
+    await expect(confirmDelete).toBeFocused();
+
+    await popup.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await expect(deleteBtn).toBeFocused();
+    await expect(popup.getByRole('dialog', { name: 'Edit bookmark' })).toBeVisible();
+    expect(mockServer.getBookmarks()).toHaveLength(1);
   });
 
   test('Cancel closes the modal without saving changes', async ({ openPopup, mockServer }) => {
@@ -329,5 +355,20 @@ test.describe('Settings page', () => {
     expect(await recent.evaluate((el: HTMLInputElement) => el.validity.rangeOverflow)).toBe(true);
     const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
     expect(saved.recentCount).toBe(20);
+  });
+});
+
+test.describe('Server unreachable', () => {
+  test('a switched-off server is reported as unreachable, not as a generic sync failure', async ({ mockServer, seedSettings, openPopup }) => {
+    mockServer.setBookmarks([makeApiBookmark({ id: 1, url: 'https://a.example.com', title: 'Alpha' })]);
+    await seedSettings();
+    await mockServer.close(); // the "home server" goes down after the first sync
+
+    const popup = await openPopup();
+    await popup.getByRole('button', { name: 'Refresh bookmarks' }).click();
+
+    await expect(popup.getByRole('status').filter({ hasText: 'showing cached bookmarks' }))
+      .toHaveText(/Can.t reach your server/);
+    await expect(popup.getByRole('listbox', { name: 'Bookmarks' }).getByText('Alpha')).toBeVisible();
   });
 });

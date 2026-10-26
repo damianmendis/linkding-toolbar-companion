@@ -10,6 +10,7 @@ import {
   httpError,
   testConnection,
   TimeoutError,
+  SERVER_UNREACHABLE_MESSAGE,
 } from '../../src/lib/api';
 import type { ApiBookmark, ApiPaginatedResponse } from '../../src/lib/types';
 
@@ -290,5 +291,28 @@ describe('request timeout', () => {
     const settled = expect(pending).rejects.toThrow('Connection timed out. Check the server URL.');
     await vi.advanceTimersByTimeAsync(5000);
     await settled;
+  });
+});
+
+describe('unreachable server', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reports a network failure as the server being unreachable, not the browser's raw message", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(fetchAllTags('https://links.example.com', 'tok')).rejects.toThrow(SERVER_UNREACHABLE_MESSAGE);
+  });
+
+  it('leaves errors from a response that did arrive alone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false, status: 502, headers: new Headers({ 'content-type': 'text/html' }), json: async () => ({}),
+    } as Response));
+    await expect(fetchAllTags('https://links.example.com', 'tok')).rejects.toThrow('Fetching tags failed: server error (502). Try again later.');
+  });
+
+  it('testConnection keeps its own wording', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(testConnection('https://links.example.com', 'tok')).rejects.toThrow('Cannot reach server. Check the URL and your network.');
   });
 });

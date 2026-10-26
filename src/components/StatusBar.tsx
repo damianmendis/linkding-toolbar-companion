@@ -1,5 +1,6 @@
 import styles from './StatusBar.module.css';
 import type { CacheState } from '../lib/types';
+import { SERVER_UNREACHABLE_MESSAGE } from '../lib/api';
 
 interface StatusBarProps {
   cache: CacheState | null;
@@ -32,6 +33,17 @@ export function StatusBar({ cache, isSyncing, isOffline }: StatusBarProps) {
       <div className={`${styles.bar} ${styles.offline}`} role="status" aria-live="polite">
         <span className={styles.dot} />
         Offline — showing cached bookmarks
+      </div>
+    );
+  }
+
+  // The browser is online but the Linkding server isn't answering -- a
+  // switched-off home server, say. Like offline: the cache still works.
+  if (cache?.lastSyncStatus === 'error' && cache.lastError === SERVER_UNREACHABLE_MESSAGE) {
+    return (
+      <div className={`${styles.bar} ${styles.offline}`} role="status" aria-live="polite" title={cache.lastError}>
+        <span className={styles.dot} />
+        Can&rsquo;t reach your server &mdash; showing cached bookmarks
       </div>
     );
   }

@@ -42,6 +42,15 @@ function buildHeaders(apiToken: string): HeadersInit {
   };
 }
 
+/**
+ * Shown when a request fails before any response arrives (server down, DNS
+ * failure, connection refused) -- browsers report all of these as a bare
+ * "Failed to fetch" / "NetworkError". The popup's status bar matches on it
+ * to say the server, not the internet connection, is the problem.
+ */
+export const SERVER_UNREACHABLE_MESSAGE =
+  "Can't reach your Linkding server. Check that it's running and the URL in Settings is right.";
+
 /** A request, including reading its response body, took longer than API_TIMEOUT_MS. */
 export class TimeoutError extends Error {
   constructor() {
@@ -72,7 +81,14 @@ async function request<T>(
   });
   try {
     return await Promise.race([
-      fetch(url, { ...options, signal: controller.signal }).then(handle),
+      fetch(url, { ...options, signal: controller.signal })
+        .catch((err: unknown) => {
+          // A timeout aborts the fetch; that rejection loses the race to
+          // TimeoutError, so only report genuine network failures here.
+          if (controller.signal.aborted) throw err;
+          throw new Error(SERVER_UNREACHABLE_MESSAGE);
+        })
+        .then(handle),
       timedOut,
     ]);
   } finally {

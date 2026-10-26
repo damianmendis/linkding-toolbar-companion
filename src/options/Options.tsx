@@ -232,10 +232,10 @@ export function Options() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <span className={styles.logo}>🔖</span>
+        <img className={styles.logo} src="/assets/icon-128.png" alt="" width={48} height={48} />
         <div>
-          <h1 className={styles.heading}>Linkding Settings</h1>
-          <p className={styles.subheading}>Connect and configure your Linkding extension.</p>
+          <h1 className={styles.heading}>Linkding Toolbar Companion</h1>
+          <p className={styles.subheading}>Settings: connect your Linkding server and choose how the extension behaves.</p>
         </div>
       </header>
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from '../Popup.module.css';
 import { BookmarkRow } from '../../components/BookmarkRow';
 import { StatusBar } from '../../components/StatusBar';
-import { PlusIcon, RefreshIcon, SearchIcon, SettingsIcon } from '../../components/Icons';
+import { CloseIcon, PlusIcon, RefreshIcon, SearchIcon, SettingsIcon } from '../../components/Icons';
 import { searchAll, getRecent, describeQuery, RESULTS_PAGE_SIZE } from '../../lib/search';
 import type { Bookmark, CacheState, Settings } from '../../lib/types';
 
@@ -158,7 +158,7 @@ export function MainView({
             spellCheck={false}
           />
           {query && (
-            <button type="button" className={styles.clearBtn} onClick={() => { setQuery(''); searchRef.current?.focus(); }} aria-label="Clear search">✕</button>
+            <button type="button" className={styles.clearBtn} onClick={() => { setQuery(''); searchRef.current?.focus(); }} aria-label="Clear search"><CloseIcon width={12} height={12} /></button>
           )}
         </div>
         <button type="button" className={styles.iconBtn} onClick={onOpenAdd} disabled={isOffline} aria-label="Add bookmark" title="Save current page"><PlusIcon /></button>

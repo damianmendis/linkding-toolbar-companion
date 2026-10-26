@@ -132,6 +132,13 @@ export async function startMockServer(): Promise<MockServer> {
     getBookmarks() {
       return bookmarks;
     },
-    close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+    // Safe to call twice (a test may take the server down itself before the
+    // fixture's teardown), and drops kept-alive browser connections so it
+    // doesn't wait on them.
+    close: () => new Promise<void>((resolve, reject) => {
+      if (!server.listening) return resolve();
+      server.close((err) => (err ? reject(err) : resolve()));
+      server.closeAllConnections();
+    }),
   };
 }
