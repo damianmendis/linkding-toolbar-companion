@@ -9,6 +9,7 @@
  * Run: npm run build:chrome && npm run test:e2e
  */
 import { test, expect, makeApiBookmark } from './fixtures/extension';
+import type { CacheState, Settings } from '../../src/lib/types';
 
 test.describe('Unconfigured state', () => {
   test('shows the connect-your-server screen when no settings exist', async ({ openPopup }) => {
@@ -325,7 +326,7 @@ test.describe('Settings page', () => {
 
     await page.getByRole('button', { name: 'Save settings' }).click();
     await expect(page.getByText('✓ Saved')).toBeVisible();
-    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings as Settings);
     expect(saved.recentCount).toBe(35);
     expect(saved.autoRefreshMinutes).toBe(15);
   });
@@ -342,8 +343,8 @@ test.describe('Settings page', () => {
     await page.getByRole('button', { name: 'Save settings' }).click();
 
     await expect(page.getByText('✓ Refreshed')).toBeVisible();
-    const cache = await page.evaluate(async () => (await chrome.storage.local.get('cache')).cache);
-    expect(cache.bookmarks.map((b: { title: string }) => b.title)).toEqual(['Alpha']);
+    const cache = await page.evaluate(async () => (await chrome.storage.local.get('cache')).cache as CacheState);
+    expect(cache.bookmarks.map((b) => b.title)).toEqual(['Alpha']);
   });
 
   test('the browser refuses an out-of-range value before anything is saved', async ({ context, extensionId }) => {
@@ -355,7 +356,7 @@ test.describe('Settings page', () => {
     await page.getByRole('button', { name: 'Save settings' }).click();
 
     expect(await recent.evaluate((el: HTMLInputElement) => el.validity.rangeOverflow)).toBe(true);
-    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    const saved = await page.evaluate(async () => (await chrome.storage.local.get('settings')).settings as Settings);
     expect(saved.recentCount).toBe(20);
   });
 });
