@@ -131,11 +131,12 @@ both stores:
 |---|---|
 | `01-list.png` | Recent bookmarks list on popup open |
 | `02-search.png` | Instant local search, filtered to one result |
-| `03-save.png` | "Save current page" form, pre-filled |
+| `03-save.png` | Save form from the top-bar + button, pre-filled |
 | `04-edit.png` | Inline edit modal |
 | `05-options.png` | Settings page, server connected |
 
-Generated against the E2E mock-server harness with a seeded, realistic-
+Last regenerated for v1.0.7 with the scripts in `scripts/store-screenshots/`
+(see its README). Generated against a mock Linkding server with a seeded, realistic-
 looking bookmark set (not a real user's data), then composited into a
 lightweight browser-chrome mockup with a caption, reusing the extension's
 own color and type tokens. The one cosmetic liberty: the settings screenshot

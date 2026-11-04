@@ -54,6 +54,12 @@ export default tseslint.config(
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
+  // Store-screenshot scripts: Node ES modules that drive Playwright, so
+  // they also evaluate code in the extension's pages.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser, ...globals.webextensions } },
+  },
   {
     files: ['*.config.{ts,mjs}'],
     languageOptions: { globals: globals.node },
